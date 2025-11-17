@@ -139,7 +139,7 @@ Local Sage is released under the **MIT License**.
 
 You are free to use, modify, and distribute this software, provided that attribution is maintained and the license notice is included in derivative works.
 
-### And most of all!
+## And most of all!
 I wanted to say thank you to the OSS community! ❤️
 Without all of your wonderful creations, I never would have had the inspiration to create something myself.
 
