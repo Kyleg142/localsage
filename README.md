@@ -35,16 +35,6 @@ There is even a collection of [built-in Markdown themes](https://pygments.org/st
 ![Screenshot2](path/to/screenshot.png)
 *Output for attaching a file and purging it.*
 
-## Under the Hood 🛠️
-At its core, Local Sage uses the **Rich** library combined with a custom math sanitizer to render live Markdown and readable in-line math. Chunk processing is frame-synchronized to the refresh rate of a rich.live display, meaning that the entire rendering process occurs on a customizable interval. Effectively a hand-rolled, lightweight, synchronized rendering engine running right in your terminal.
-
-No flickering, no race conditions, and no coroutine overhead. Just a smooth flow of rendered output.
-
-You can adjust the refresh rate using the `!rate` command (30 FPS by default).
-
-### Design Philosophy
-Local Sage abides by a **CLI-first** design philosophy. Configuration, interaction, and workflow are all bound to the command line. No GUI mimicry and no hidden layers.
-
 ## Compatibility 🔩
 **Python 3.9** or later required.
 
@@ -107,15 +97,25 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 
 **NOTE:** Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have swap your API key with `!key`.
 
-## Notes & Acknowledgements 🫵
-Local Sage’s math sanitizer doesn’t attempt to fix broken LaTeX, and Rich’s Markdown parser can’t repair malformed Markdown. Please report rendering issues only if you’ve confirmed they originate from Local Sage’s math sanitizer.
+## Under the Hood 🛠️
+At its core, Local Sage uses the **Rich** library combined with a custom math sanitizer to render live Markdown and readable in-line math. Chunk processing is frame-synchronized to the refresh rate of a rich.live display, meaning that the entire rendering process occurs on a customizable interval. Effectively a hand-rolled, lightweight, synchronized rendering engine running right in your terminal.
 
-Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
+No flickering, no race conditions, and no coroutine overhead. Just a smooth flow of rendered output.
+
+You can adjust the refresh rate using the `!rate` command (30 FPS by default).
+
+### Design Philosophy
+Local Sage abides by a **CLI-first** design philosophy. Configuration, interaction, and workflow are all bound to the command line. No GUI mimicry and no hidden layers.
 
 ## Versioning 🔧
 Version **1.0.0** is the fully 'finished' release, containing full CLI functionality.
 - **1.0.x** - Minor patches consisting of bug fixes and aesthetic tweaks.
 - **1.x.0** - Major patches consisting of feature expansions or necessary refactors.
+
+## Notes & Acknowledgements 🫵
+Local Sage’s math sanitizer doesn’t attempt to fix broken LaTeX, and Rich’s Markdown parser can’t repair malformed Markdown. Please report rendering issues only if you’ve confirmed they originate from Local Sage’s math sanitizer.
+
+Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
 
 ## License ⚖️
 Local Sage is released under the **MIT License**.
