@@ -130,4 +130,4 @@ Contributions are always welcome! Please open an issue for discussion!
 
 ---
 
-💼 I am currently seeking opportunities! If Local Sage impressed you or you think my skill set would fit your team, feel free to reach out.
+I am currently seeking opportunities! If Local Sage impressed you or you think my skill set would fit your team, feel free to reach out.
