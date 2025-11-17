@@ -107,7 +107,6 @@ Your config file, session files, and error logs are stored in your user's data d
 | Linux: | ~/.local/share/LocalSage |
 | macOS: | ~/Library/Application Support/LocalSage |
 | Windows: | %localappdata%/LocalSage |
-| ☦️ TempleOS: | GOD:/LocalSage (divine intervention required) |
 
 ## Display Notes 🖥️
 LLMs love to spam emojis. Make sure that your terminal emulator properly renders them, otherwise you will see some nasty visual artifacting.
