@@ -3,7 +3,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-red)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A **synchronous, Rich-powered CLI** for AI conversations, featuring **live Markdown rendering and LaTeX conversion.** All the clarity and structure of a modern web GUI, without ever leaving the shell.
+A **synchronous, Rich-powered CLI** for AI conversations. All the clarity and structure of a modern web GUI, without ever leaving the shell. Featuring **live Markdown rendering and LaTeX conversion**.
 
 ![Demo gif placeholder](path/to/demo.gif)
 *Asking GPT-OSS 20B for a rundown on `getopts`, saving, exiting, and reloading the session.*
@@ -22,8 +22,8 @@ Local Sage is an open-source CLI frontend for session-based AI chat. Not automat
 - Lightweight, below 2000 lines of **Python** 🐍.
 
 ### Plus everything you'd expect from a solid chat frontend.
-- **Session management:** load, save, delete, reset, and summarize sessions.
-- **Profile management:** save, delete, and switch between models and endpoints.
+- **Session management**: load, save, delete, reset, and summarize sessions.
+- **Profile management**: save, delete, and switch between models and endpoints.
 - File attachments for any text-based files.
 - Reasoning/Chain-of-thought support with a dedicated Reasoning panel.
 - Context length monitoring via **tiktoken**, shown through a subtle status panel (with a bonus turn counter).
@@ -31,10 +31,10 @@ Local Sage is an open-source CLI frontend for session-based AI chat. Not automat
 There is even a collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from, courtesy of **Rich**.
 
 ### Use Cases
-- **Multiplexer Companion:** Drop Local Sage into tmux / zellij panes next to editors (Helix, Neovim) or system monitors (htop, btop).
-- **Dev Assistant:** Attach logs, code, or configs as text files and get contextual responses without switching contexts.
-- **Writing Assistant:** Draft essays, READMEs, or docs without GUI distractions. Documentation can be reattached without bloating context length.
-- **Immersive Roleplay:** Perfectly simulates the retro sci-fi aesthetic of conversing with machine intelligence.
+- **Multiplexer Companion**: Drop Local Sage into tmux / zellij panes next to editors (Helix, Neovim) or system monitors (htop, btop).
+- **Dev Assistant**: Attach logs, code, or configs as text files and get contextual responses without switching contexts.
+- **Writing Assistant**: Draft essays, READMEs, or docs without GUI distractions. Documentation can be reattached without bloating context length.
+- **Immersive Roleplay**: Perfectly simulates the retro sci-fi aesthetic of conversing with machine intelligence.
 
 ## Demo & Screenshots 🗺
 ![Screenshot1](path/to/screenshot.png)
@@ -44,16 +44,14 @@ There is even a collection of [built-in Markdown themes](https://pygments.org/st
 *Output for attaching a file and purging it.*
 
 ## Under the Hood 🛠️
-At its core, Local Sage uses the **Rich** library combined with a custom math sanitizer to render live Markdown and readable in-line math.
-Chunk processing is frame-synchronized to the refresh rate of a rich.live display, meaning that the entire rendering process occurs on a customizable interval.
-Effectively a hand-rolled, lightweight, synchronized rendering engine running right in your terminal.
+At its core, Local Sage uses the **Rich** library combined with a custom math sanitizer to render live Markdown and readable in-line math. Chunk processing is frame-synchronized to the refresh rate of a rich.live display, meaning that the entire rendering process occurs on a customizable interval. Effectively a hand-rolled, lightweight, synchronized rendering engine running right in your terminal.
 
 No flickering, no race conditions, and no coroutine overhead. Just a smooth flow of rendered output.
 
 You can adjust the refresh rate using the `!rate` command (30 FPS by default).
 
 ### Design Philosophy
-Local Sage doesn’t try to mimic a GUI inside your terminal. **It embraces the command line itself.** Clean text, live rendering, session-based dialogue, and a shell-like interactive prompt.
+Local Sage abides by a **CLI-first** design philosophy. Configuration, interaction, and workflow are all bound to the command line. No GUI mimicry and no hidden layers.
 
 ## Compatibility 🔩
 **Python 3.9** or later required.
@@ -64,7 +62,7 @@ As for backends, Local Sage is designed to work with any backend that features a
 
 And, of course, you can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it in your OS's built-in credential manager via **keyring**.
 
-Local Sage is tested with four small and diverse models hosted via Llama.cpp on my humble 7900xt.
+Local Sage is tested with four small and diverse models hosted via llama.cpp on my humble 7900xt.
 - GPT-OSS 20B
 - LFM2 8B A1B
 - Nemotron Nano 12B v2
@@ -79,9 +77,7 @@ Open up your terminal and type:
 pip install localsage
 ```
 
-That's it! ✅
-
-👉 Type `localsage` into your terminal to launch, then use the `!h` command to view usage. 👈
+Type `localsage` into your terminal to launch the CLI. Type `!h` to view usage.
 
 **Read through the usage tables carefully!** Proper command usage is key to getting full use out of Local Sage. It is a CLI frontend, after all.
 
@@ -93,11 +89,8 @@ That's it! ✅
 - [tiktoken](https://github.com/openai/tiktoken) - Provides tokenization and enables context length calculation.
 - [platformdirs](https://github.com/platformdirs/platformdirs) - Detects default directories across operating systems.
 - [pylatexenc](https://github.com/phfaist/pylatexenc) - Absolutely vital for live math sanitization.
-- [sage_math_sanitizer](https://github.com/kyleg142/localsage) - Included, Local Sage's math sanitizer.
 
-Local Sage was designed with minimal dependencies, so the download is very light. (No excessive Python library bloat on your system!)
-
-Local Sage is kept as a monolith out of design preference, one file named `sage.py`.
+Local Sage was designed with minimal dependencies, so the download is very light.
 
 ### File Locations 📁
 Your config file, session files, and error logs are stored in your user's data directory.
@@ -109,9 +102,7 @@ Your config file, session files, and error logs are stored in your user's data d
 | Windows: | %localappdata%/LocalSage |
 
 ## Display Notes 🖥️
-LLMs love to spam emojis. Make sure that your terminal emulator properly renders them, otherwise you will see some nasty visual artifacting.
-
-Typing into the terminal while streaming will also cause visual artifacting, since output is rendered directly into the main viewport rather than an alternate buffer. Avoid typing into the terminal window until streaming completes.
+Typing into the terminal while streaming is occurring will cause visual artifacting, since output is rendered directly into the main viewport rather than an alternate buffer. Avoid typing into the terminal window until streaming completes.
 
 A monospaced Nerd font is **HIGHLY** recommended as well for a seamless experience. It ensures that Markdown, math, and icons all align well on-screen. The main prompt uses a cool Nerd font chevron. If you want it to display correctly, **use a Nerd font**.
 
@@ -120,7 +111,7 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 
 **This should only be an issue on large responses that consume over an entire viewport's worth of vertical space.**
 
-**Local Sage is text-only.** This limitation keeps Local Sage portable, lightweight, and backend-agnostic. Unlike text generation and file handling, methods for image generation and attachment vary between backends and are constantly changing.
+**Local Sage is text-only.** This limitation keeps Local Sage portable, lightweight, and backend-agnostic. Unlike text generation and file handling, methods for image generation and attachment vary between backends.
 
 **NOTE:** Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have swap your API key with `!key`.
 
