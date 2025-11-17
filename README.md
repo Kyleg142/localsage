@@ -63,6 +63,8 @@ Type `localsage` into your terminal to launch the CLI. Type `!h` to view usage.
 
 **Read through the usage tables carefully!** Proper command usage is key to getting full use out of Local Sage. It is a CLI frontend, after all.
 
+Local Sage was designed with minimal dependencies, so the download is very light.
+
 ### Dependencies 🧰
 - [Rich](https://github.com/Textualize/rich) - Used extensively throughout. Panels, live rendering, etc.
 - [prompt_toolkit](https://github.com/prompt-toolkit/python-prompt-toolkit) - Prompts and completers, also used extensively.
@@ -71,8 +73,6 @@ Type `localsage` into your terminal to launch the CLI. Type `!h` to view usage.
 - [tiktoken](https://github.com/openai/tiktoken) - Provides tokenization and enables context length calculation.
 - [platformdirs](https://github.com/platformdirs/platformdirs) - Detects default directories across operating systems.
 - [pylatexenc](https://github.com/phfaist/pylatexenc) - Absolutely vital for live math sanitization.
-
-Local Sage was designed with minimal dependencies, so the download is very light.
 
 ### File Locations 📁
 Your config file, session files, and error logs are stored in your user's data directory.
