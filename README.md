@@ -3,7 +3,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-red)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A **synchronous, Rich-powered CLI** for AI conversations. All the clarity and structure of a modern web GUI, without ever leaving the shell. Featuring **live Markdown rendering and LaTeX conversion**.
+A modern LLM chat interface that embraces the command line.
 
 ![Demo gif placeholder](path/to/demo.gif)
 *Asking GPT-OSS 20B for a rundown on `getopts`, saving, exiting, and reloading the session.*
@@ -11,22 +11,22 @@ A **synchronous, Rich-powered CLI** for AI conversations. All the clarity and st
 Local Sage is designed to hook into any **OpenAI API endpoint**, and is tested extensively with local models hosted through **llama.cpp**.
 
 ## About 🔎
-Local Sage is an open-source CLI frontend for session-based AI chat. Not automation, not agents, just pure dialogue. Perhaps the *only* terminal interface that streams **live Markdown while converting LaTeX cleanly**, powered by a custom synchronous renderer built on Rich.
+Local Sage is an open-source CLI for chatting with LLMs. Not automation, not agents, just pure dialogue. 
+Perhaps the *only* terminal interface that renders **live Markdown with readable in-line math**.
 
 ### What makes **Local Sage** unique? ✨
-- Conversations that exist right in your terminal viewport via **gorgeous live Rich panels**.
-- File management subsystem that dynamically **replaces files on reattachment**, conserving context length.
-- Selective attachment purging through a simple command. Recover context length **instantly**.
-- Configuration handled entirely through CLI commands. No having to dig through a config file.
-- Interactive prompt with custom completers and in-memory history, courtesy of **prompt_toolkit**.
+- Sessions that exist right in your terminal viewport via **gorgeous live Rich panels**.
+- Main prompt with **command completion** and **in-memory history**.
+- Files are **dynamically replaced on reattachment**, conserving context length.
+- Attachments can be selecitively purged, recovering context length **instantly**.
 - Lightweight, below 2000 lines of **Python** 🐍.
 
 ### Plus everything you'd expect from a solid chat frontend.
 - **Session management**: load, save, delete, reset, and summarize sessions.
 - **Profile management**: save, delete, and switch between models and endpoints.
-- File attachments for any text-based files.
+- File attachment for any text-based files.
 - Reasoning/Chain-of-thought support with a dedicated Reasoning panel.
-- Context length monitoring via **tiktoken**, shown through a subtle status panel (with a bonus turn counter).
+- Context length monitoring via **tiktoken**, shown through a status panel.
 
 There is even a collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from, courtesy of **Rich**.
 
