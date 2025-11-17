@@ -58,9 +58,9 @@ Local Sage abides by a **CLI-first** design philosophy. Configuration, interacti
 
 The big three (**Linux, macOS,** and **Windows**) are all supported, ensure your terminal emulator has relatively modern features. Alacritty works well. So does kitty and ghostty.
 
-As for backends, Local Sage is designed to work with any backend that features an OpenAI API endpoint. I personally use **llama.cpp** and can thus guarantee compatibility for it.
+Local Sage is designed to work with any backend that features an OpenAI API endpoint. I personally use **llama.cpp** and can thus guarantee compatibility for it.
 
-And, of course, you can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it in your OS's built-in credential manager via **keyring**.
+You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it in your OS's built-in credential manager via **keyring**.
 
 Local Sage is tested with four small and diverse models hosted via llama.cpp on my humble 7900xt.
 - GPT-OSS 20B
