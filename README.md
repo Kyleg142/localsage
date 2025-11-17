@@ -14,27 +14,19 @@ Local Sage is designed to hook into any **OpenAI API endpoint**, and is tested e
 Local Sage is an open-source CLI for chatting with LLMs. Not automation, not agents, just pure dialogue. 
 Perhaps the *only* terminal interface that renders **live Markdown with readable in-line math**.
 
-### What makes **Local Sage** unique? ✨
+### What makes **Local Sage** shine? ✨
 - Sessions that exist right in your terminal viewport via **gorgeous live Rich panels**.
-- Main prompt with **command completion** and **in-memory history**.
-- Files are **dynamically replaced on reattachment**, conserving context length.
-- Attachments can be selecitively purged, recovering context length **instantly**.
+- Fancy prompts with **command completion** and **in-memory history**.
+- Context-aware file management. Files are replaced on re-attachment and can be selectively purged.
 - Lightweight, below 2000 lines of **Python** 🐍.
 
 ### Plus everything you'd expect from a solid chat frontend.
 - **Session management**: load, save, delete, reset, and summarize sessions.
 - **Profile management**: save, delete, and switch between models and endpoints.
-- File attachment for any text-based files.
 - Reasoning/Chain-of-thought support with a dedicated Reasoning panel.
-- Context length monitoring via **tiktoken**, shown through a status panel.
+- Context length monitoring via **tiktoken**, shown through a subtle status panel.
 
 There is even a collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from, courtesy of **Rich**.
-
-### Use Cases
-- **Multiplexer Companion**: Drop Local Sage into tmux / zellij panes next to editors (Helix, Neovim) or system monitors (htop, btop).
-- **Dev Assistant**: Attach logs, code, or configs as text files and get contextual responses without switching contexts.
-- **Writing Assistant**: Draft essays, READMEs, or docs without GUI distractions. Documentation can be reattached without bloating context length.
-- **Immersive Roleplay**: Perfectly simulates the retro sci-fi aesthetic of conversing with machine intelligence.
 
 ## Demo & Screenshots 🗺
 ![Screenshot1](path/to/screenshot.png)
