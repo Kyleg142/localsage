@@ -17,7 +17,7 @@ Perhaps the *only* terminal interface that renders **live Markdown with readable
 ### What makes **Local Sage** shine? ✨
 - Sessions that exist right in your terminal viewport via **gorgeous live Rich panels**.
 - Fancy prompts with **command completion** and **in-memory history**.
-- Context-aware file management. Files are replaced on re-attachment and can be selectively purged.
+- **Context-aware file management**. Files are replaced on re-attachment and can be selectively purged.
 - Lightweight, below 2000 lines of **Python** 🐍.
 
 ### Plus everything you'd expect from a solid chat frontend.
