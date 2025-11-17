@@ -3,7 +3,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-red)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A modern LLM chat interface that embraces the command line.
+**A modern LLM chat interface that embraces the command line.**
 
 ![Demo gif placeholder](path/to/demo.gif)
 *Asking GPT-OSS 20B for a rundown on `getopts`, saving, exiting, and reloading the session.*
