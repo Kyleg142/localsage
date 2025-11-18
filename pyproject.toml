@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "localsage"
 version = "1.0.0"
-description = "A CLI frontend for session-based AI chat."
+description = "A modern LLM chat interface that embraces the command line."
 readme = "README.md"
 url = "https://github.com/Kyleg142/localsage"
 requires-python = ">=3.9"
