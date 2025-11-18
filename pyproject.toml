@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "localsage"
+version = "1.0.0"
+description = "A CLI frontend for session-based AI chat."
+readme = "README.md"
+url = "https://github.com/Kyleg142/localsage"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+authors = [
+    { name = "Kyle Garcia", email = "kylegarcia142@gmail.com" }
+]
+
+maintainers = [
+    { name = "Kyle Garcia", email = "kylegarcia142@gmail.com" }
+]
+
+dependencies = [
+    "rich",
+    "tiktoken",
+    "openai",
+    "prompt_toolkit",
+    "platformdirs",
+    "keyring",
+    "pylatexenc",
+]
+
+[project.scripts]
+localsage = "localsage.sage:main"
+
+keywords = [
+    "ollama",
+    "llamacpp",
+    "openai",
+    "llm",
+    "ai",
+    "terminal",
+    "cli",
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Other Audience",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Terminals",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages]
+find = {}
