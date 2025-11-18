@@ -4,7 +4,6 @@
 #  LOCAL SAGE
 # <~~~~~~~~~~>
 
-# Base Libraries
 import getpass
 import json
 import logging
@@ -40,6 +39,9 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 from sage_math_sanitizer import sanitize_math_safe
+
+# Current version number
+__version__ = "1.0.0"
 
 # Sets and creates directories for the config file, session management, and logging
 APP_DIR = user_data_dir("LocalSage")
@@ -719,7 +721,7 @@ class Chat:
         # Intro panel constructor
         intro_panel = Panel(
             intro_text,
-            title=Text("🔮 Local Sage v1.0.0", "bold medium_orchid"),
+            title=Text(f"🔮 Local Sage {__version__}", "bold medium_orchid"),
             title_align="left",
             border_style="medium_orchid",
             box=box.HORIZONTALS,
