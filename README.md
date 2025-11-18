@@ -41,9 +41,9 @@ At its core, Local Sage uses the **Rich** library combined with a custom math sa
 
 You can adjust the refresh rate using the `!rate` command (30 FPS by default).
 #### Context-Aware File Management
-When a file is attached to a session, a unique wrapper is applied to the file's contents. The wrapper is then used to detect each specific file attachment in your conversation history. This enables file replacement on re-attachment and selective attachment removal.
+If you re-attach a file, context consumption is **massively reduced** by removing the original file from the conversation history and then appending the new copy. Removing an attachment (via the `!purge` command) will **fully refund** its context consumption.
 
-Removing an attachment (with the `!purge` command) will **refund** its context consumption. On file re-attachment, context consumption only increases in tandem with newly added content.
+This is enabled by leveraging wrappers to notate attachments and then using regex to 'snipe' them from the conversation history list.
 
 ## Compatibility 🔩
 **Python 3.9** or later required.
@@ -111,16 +111,9 @@ Version **1.0.0** is the fully 'finished' release, containing full CLI functiona
 - **1.x.0** - Major patches consisting of feature expansions or necessary refactors.
 
 ## License ⚖️
-Local Sage is released under the **MIT License**.
+Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
 
-You are free to use, modify, and distribute this software, provided that attribution is maintained and the license notice is included in derivative works.
-
-## And most of all!
-I wanted to say thank you to the OSS community!
-Without all of your wonderful creations, I never would have had the inspiration to create something myself.
+## And lastly...
+I wanted to say thank you to the OSS community! Without all of your wonderful creations, I never would have had the inspiration to create something myself.
 
 Contributions are always welcome! Please open an issue for discussion!
-
----
-
-I am currently seeking opportunities! If Local Sage impressed you or you think my skill set would fit your team, feel free to reach out.
