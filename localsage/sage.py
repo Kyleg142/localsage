@@ -38,10 +38,9 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
-from sage_math_sanitizer import sanitize_math_safe
 
-# Current version number
-__version__ = "1.0.0"
+from localsage import __version__
+from localsage.sage_math_sanitizer import sanitize_math_safe
 
 # Sets and creates directories for the config file, session management, and logging
 APP_DIR = user_data_dir("LocalSage")
