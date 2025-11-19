@@ -90,14 +90,14 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 USER_NAME = getpass.getuser()
 
 # Reasoning panel configuration
-REASONING_PANEL_TITLE = Text("🧠 REASONING", style="bold yellow")
+REASONING_PANEL_TITLE = Text("🧠 Reasoning", style="bold yellow")
 REASONING_TITLE_ALIGN = "left"
 REASONING_BORDER_STYLE = "yellow"
 REASONING_TEXT_STYLE = "#b0b0b0 italic"  # grey66 looks great but is opinionated
 REASONING_PANEL_WIDTH = None
 
 # Response panel configuration
-RESPONSE_PANEL_TITLE = Text("💬 RESPONSE", style="bold green")
+RESPONSE_PANEL_TITLE = Text("💬 Response", style="bold green")
 RESPONSE_TITLE_ALIGN = "left"
 RESPONSE_BORDER_STYLE = "green"
 RESPONSE_TEXT_STYLE = "default"
@@ -903,7 +903,7 @@ class Chat:
             content,
             box=box.HORIZONTALS,
             padding=(0, 0),
-            title=Text("🌐 YOU", style="bold blue"),
+            title=Text("🌐 You", style="bold blue"),
             title_align="left",
             border_style="blue",
         )
@@ -919,7 +919,7 @@ class Chat:
             ),
             box=box.HORIZONTALS,
             padding=(0, 0),
-            title=Text("💬 RESPONSE", style="bold green"),
+            title=Text("💬 Response", style="bold green"),
             title_align=RESPONSE_TITLE_ALIGN,
             border_style=RESPONSE_BORDER_STYLE,
         )
