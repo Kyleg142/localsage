@@ -19,7 +19,7 @@ Designed to hook into any **OpenAI API endpoint**, and tested extensively with l
 #### What else makes **Local Sage** shine? ✨
 - Conversations that exist right in your terminal viewport via **gorgeous live Rich panels**.
 - Fancy prompts with **command completion** and **in-memory history**.
-- **Context-aware file management.** See the [Under the Hood](https://github.com/Kyleg142/localsage/tree/main#under-the-hood-%EF%B8%8F) section for more info!
+- **Context-aware file management.** See the [Under the Hood](#under-the-hood-%EF%B8%8F) section for more info!
 - Lightweight, below 2000 lines of **Python** 🐍.
 
 #### Plus everything you'd expect from a solid chat frontend.
