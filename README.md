@@ -4,10 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **A modern LLM chat interface that embraces the command line.**
-
-![Demo gif placeholder](path/to/demo.gif)
-*Asking GPT-OSS 20B for a rundown on `getopts`, saving, exiting, and reloading the session.*
-
+<p align="center">
+  <video width="720" autoplay loop muted playsinline>
+    <source src="assets/localsagedemo.mp4" type="video/mp4">
+  </video>
+</p>
 Local Sage is designed to hook into any **OpenAI API endpoint**, and is tested extensively with local models hosted through **llama.cpp**.
 
 ## About 🔎
