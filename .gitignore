@@ -28,7 +28,9 @@ nosetests.xml
 coverage.xml
 
 # Virtual environments
+.venv/
 venv/
+.env/
 env/
 .local/
 .python-version
