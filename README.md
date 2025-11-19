@@ -5,7 +5,7 @@
   <a><img src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
 </p>
 
-<p align="center"><b>A modern LLM chat interface that embraces the command line.</b></p>
+<p align="center"><b>A lightweight LLM chat interface that embraces the command line.</b></p>
 
 <p align="center"><img width="1200" alt="Local Sage Demo" src="assets/localsagedemo.gif"></p>
 
@@ -20,7 +20,7 @@ Designed to hook into any **OpenAI API endpoint**, and tested extensively with l
 - Conversations that exist right in your terminal viewport via **gorgeous live Rich panels**.
 - Fancy prompts with **command completion** and **in-memory history**.
 - **Context-aware file management.** See the [Under the Hood](#under-the-hood-%EF%B8%8F) section for more info!
-- Lightweight, below 2000 lines of **Python** 🐍.
+- Small but mighty, below 2000 lines of **Python** 🐍.
 
 #### Plus everything you'd expect from a solid chat frontend.
 - **Session management**: load, save, delete, reset, and summarize sessions.
