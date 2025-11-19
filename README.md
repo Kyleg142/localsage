@@ -48,7 +48,7 @@ pip install localsage
 
 Type `localsage` into your terminal to launch the CLI. Type `!h` to view usage.
 
-**Read through the usage tables carefully!** Proper command usage is key to getting full use out of Local Sage. It is a CLI frontend, after all.
+**Read through the usage tables carefully!** Proper command usage is key to configuring and using the CLI.
 
 ### Dependencies 🧰
 Local Sage is designed with minimal dependencies, keeping the download light and minimizing library bloat.
