@@ -4,19 +4,22 @@ about: Create a bug report!
 title: ''
 labels: bug
 assignees: ''
-
 ---
 
-VERSION: Installed Local Sage version.
+### Version
+<!-- Installed Local Sage version. -->
 
-OS: Linux distro / macOS / Windows
+### OS & Terminal
+<!-- Your operating system and terminal emulator. -->
 
-TERMINAL: The terminal emulator you were using when the bug occurred.
+### Description
+<!-- A clear and concise description of the bug. -->
 
-DESCRIPTION: A clear and concise description of the bug.
+### To Reproduce
+<!-- Steps to reproduce the bug. -->
 
-TO REPRODUCE: Steps to reproduce the bug.
+### Screenshots & Logs
+<!-- Attach screenshots and/or logs if applicable. -->
 
-SCREENSHOTS: If applicable, attach screenshots.
-
-LOGS: If applicable, attach log files.
+### Additional context
+<!-- Anything else you'd like to share. -->
