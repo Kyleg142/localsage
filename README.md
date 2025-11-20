@@ -109,4 +109,4 @@ Local Sage is released under the [**MIT License**](https://opensource.org/licens
 ## And lastly...
 I wanted to say thank you to the OSS community! Without all of your wonderful creations, I never would have had the inspiration to create something myself.
 
-Contributions are always welcome! Please open an issue for discussion!
+Contributions are always welcome! See [**Contributing**](https://github.com/Kyleg142/localsage/blob/main/.github/CONTRIBUTING.md).
