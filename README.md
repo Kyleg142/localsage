@@ -1,15 +1,15 @@
 # 🔮 Local Sage
 <p align="center">
-  <a><img src="https://img.shields.io/badge/python-3.9+-blue"></a>
-  <a><img src="https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-red"></a>
-  <a><img src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+  <img src="https://img.shields.io/badge/python-3.9+-blue">
+  <img src="https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-red">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg">
 </p>
 
 <p align="center"><b>A lightweight LLM chat interface that embraces the command line.</b></p>
 
-<p align="center"><img width="1200" alt="Local Sage Demo" src="assets/localsagedemo.gif"></p>
+<p align="center"><img width="1200" alt="Local Sage Demo" src="https://raw.githubusercontent.com/Kyleg142/localsage/main/assets/localsagedemo.gif"></p>
 
-<p align="center"><img src="assets/localsage+zellij.png" width="1200"><br><i>Local Sage running in Zellij, alongside Helix and Yazi.</i></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Kyleg142/localsage/main/assets/localsage%2Bzellij.png" width="1200"><br><i>Local Sage running in Zellij, alongside Helix and Yazi.</i></p>
 
 ## About 🔎
 Local Sage is an open-source CLI for chatting with LLMs. Not automation, not agents, just pure dialogue. Featuring **synchronous live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience.
