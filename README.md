@@ -38,17 +38,19 @@ The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your
 You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**.
 
 ## Installation 💽
-Install **pip** for your OS, the Python package manager.
+Install a Python package manager for your OS. Both **pipx** and **uv** are highly recommended.
 
-Open up your terminal and type:
-
+###### For pipx, open your terminal and type:
 ```bash
-pip install localsage
+pipx install localsage
 ```
+###### Or, for uv, type:
+```bash
+uv tool install localsage
+```
+Type `localsage` into your terminal to launch the CLI. Type `!h` to view command usage.
 
-Type `localsage` into your terminal to launch the CLI. Type `!h` to view usage.
-
-**Read through the usage tables carefully!** Proper command usage is key to configuring and using the CLI.
+Configuration is done entirely through interactive commands in the CLI. You never have to touch a config file.
 
 ### Dependencies 🧰
 Local Sage is designed with minimal dependencies, keeping the download light and minimizing library bloat.
