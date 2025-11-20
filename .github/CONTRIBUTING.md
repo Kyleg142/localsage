@@ -28,9 +28,13 @@ You do not have to fight every type warning to the death, but don’t introduce 
 ## Pull Request Guidelines
 Keep PRs **small and focused**, one feature/fix per PR. For large features or changes, open an issue first for discussion.
 
-**In your PR description, include:**
+#### To get started:
+1. Fork the repo.
+2. Clone your fork.
+3. Create a branch, commit your changes, and push.
+4. Open a PR to `main` on the original repo.
+
+#### In your PR description, include:
 1. What problem this solves.
 2. What has changed.
 3. How you tested the change (commands & environment).
-
-All PRs are welcome and will be considered! I do reserve the right to say "no" to changes that do not fit the project's core.
