@@ -38,7 +38,7 @@ def test_config_defaults(tmp_path):
 
 
 def test_config_save_load(tmp_path):
-    """Verify the CLI save and load settings from disk."""
+    """Verify the CLI can save and load settings from disk."""
     fake_config_file = tmp_path / "settings.json"
 
     with patch("localsage.sage.CONFIG_FILE", str(fake_config_file)):
@@ -99,21 +99,18 @@ def test_application_startup_and_quit(
     mock_get_pass.return_value = "fake-api-key"
 
     # 2. Setup the input stream
-    # The app calls prompt() inside a loop.
+    # sage.py calls prompt() inside a loop.
     # First call: return "!q" to quit.
     mock_prompt.return_value = "!q"
 
     # 3. Run the main entry point
-    # sage.py doesn't actually use SystemExit, but it is here for redundancy
+    # Note: sage.py doesn't actually use SystemExit/sys.exit(), but it is here for redundancy
     try:
         sage.main()
     except SystemExit as e:
-        # If your app called sys.exit(0), that's a success.
-        # If it called sys.exit(1), it's a failure.
         assert e.code == 0
     except Exception as e:
         pytest.fail(f"App crashed during startup: {e}")
 
     # 4. Verification
-    # Did we actually ask for input?
     mock_prompt.assert_called()
