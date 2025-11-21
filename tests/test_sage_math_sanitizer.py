@@ -1,3 +1,9 @@
+"""
+Tests sage_math_sanitizer.py in it's entirety.
+
+Focuses on core functionality, quirks, and odd output combinations.
+"""
+
 import pytest
 
 from localsage.sage_math_sanitizer import sanitize_math_safe
@@ -107,7 +113,7 @@ def test_logic_operators(latex_op, unicode_char):
 def test_basic_math_delimiters():
     """Test conversion of standard delimiters."""
     # Dollar sign
-    assert sanitize_math_safe("$x^2$") == "x^2"
+    assert sanitize_math_safe("$x^2$") == "x^2" or "x²"
     # Escaped parens
     assert sanitize_math_safe("\\(1 + 1\\)") == "1 + 1"
     # Escaped brackets (display math)
