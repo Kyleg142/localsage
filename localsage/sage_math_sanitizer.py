@@ -104,7 +104,10 @@ _MATH_DELIMS = (
 )
 
 # Orphan LaTeX commands like \log_b, \frac{...}{...}, \sqrt{x}, etc.
-_ORPHAN = re.compile(r"\\[A-Za-z]+(?:_[A-Za-z0-9]+)?(?:\{[^{}]*\})*(?:\{[^{}]*\})*")
+# Old regex: \\[A-Za-z]+(?:_[A-Za-z0-9]+)?(?:\{[^{}]*\})*(?:\{[^{}]*\})*
+_ORPHAN = re.compile(
+    r"\\[A-Za-z]+(?![a-zA-Z])(?:_[A-Za-z0-9]+(?![A-Za-z0-9]))?(?:\{[^{}]*\})*(?!\{)"
+)
 
 # Orphan dollar cleanup
 # Old regex: (?m)(?<![`$])\$(?=(?:[^$\n])*?(?:[\^_\\]))(?=(?:[^$\n])*$)
@@ -137,8 +140,9 @@ _LOGIC_OPS = {
     "because": "∵",
     "therefore": "∴",
 }
+# Old regex:  \\(?:iff|implies|Longrightarrow|to|rightarrow|Rightarrow|gets|leftarrow|Leftarrow|Leftrightarrow|Longleftrightarrow|mapsto|because|therefore)\b
 _RE_LOGIC_OPS = re.compile(
-    r"\\(?:iff|implies|Longrightarrow|to|rightarrow|Rightarrow|gets|leftarrow|Leftarrow|Leftrightarrow|Longleftrightarrow|mapsto|because|therefore)\b"
+    r"\\(?:iff|implies|Longrightarrow|to|rightarrow|Rightarrow|gets|leftarrow|Leftarrow|Leftrightarrow|Longleftrightarrow|mapsto|because|therefore)(?![a-z])"
 )
 
 
@@ -248,6 +252,12 @@ def sanitize_math_safe(text: str) -> str:
             text,
         )
 
+    # 2.5) Clean up true dangling math '$' and never touch shell/currency
+    # Leading orphan '$' on a line that clearly starts math and has no closer
+    text = _ORPHAN_DOLLAR_LEADING.sub("", text)
+    # Trailing orphan '$' at end of line (rare but can happen)
+    text = _ORPHAN_DOLLAR_TRAILING.sub("", text)
+
     # 3) Restore protected code spans
     if code_spans:
 
@@ -262,11 +272,5 @@ def sanitize_math_safe(text: str) -> str:
 
     # 4) Restore Markdown separators (handles {MDSEP_n}, ⟦MDSEP_n⟧, or bare MDSEP_n)
     text = _restore_md_separators(text, seps)
-
-    # 4.5) Clean up true dangling math '$' and never touch shell/currency
-    # Leading orphan '$' on a line that clearly starts math and has no closer
-    text = _ORPHAN_DOLLAR_LEADING.sub("", text)
-    # Trailing orphan '$' at end of line (rare but can happen)
-    text = _ORPHAN_DOLLAR_TRAILING.sub("", text)
 
     return text
