@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "localsage"
 description = "A lightweight, elegant CLI for AI chat."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 dynamic = ["version"]
