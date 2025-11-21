@@ -1,6 +1,6 @@
 # 🔮 Local Sage
 <p align="center">
-  <img src="https://img.shields.io/badge/python-3.9+-blue">
+  <img src="https://img.shields.io/badge/python-3.10+-blue">
   <img src="https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-red">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg">
 </p>
@@ -31,7 +31,7 @@ Featuring **synchronous live Markdown rendering with inline math conversion** fo
 There is also collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from to customize your sessions!
 
 ## Compatibility 🔩
-**Python 3.9** or later required.
+**Python 3.10** or later required.
 
 The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your terminal emulator has relatively modern features. Alacritty works well. So does kitty and Ghostty.
 
