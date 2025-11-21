@@ -1,40 +1,40 @@
 # Contributing to Local Sage
 Thank you for considering contributing! Expectations are quite simple. Keep changes small and focused, and do not blow up the UX.
 
-## Python Version 🐍
-Local Sage currently targets **Python 3.9+**.
+## Expectations 📝
+- **Python Version:** Dependency based, currently 3.9+.
+- **Scope:** One feature or fix per PR. If it's a big change, please open an issue first.
+- **Description:** A rundown on your PR.
 
-If you’re submitting code, make sure it at least runs on 3.9.
-
-## Code Style
+## Code Quality 🐍
 **This project uses:**
-- **ruff** for linting & formatting
-- **pyright** / **basedpyright** for type checking
+- `ruff` for linting & formatting.
+- `pyright` or `basedpyright` for type checking.
 
 **Typical checks before opening a PR:**
 ```bash
 # Lint
-ruff check sage.py
+ruff check .
 # format
-ruff format sage.py
+ruff format .
 
 # Type check
 pyright sage.py
 # or, if you’re using basedpyright:
 basedpyright sage.py
 ```
-You do not have to fight every type warning to the death, but don’t introduce obvious new ones for no reason. If you can’t get a clean run because of something strict, leave a short comment explaining why and move on.
+**Note:** You do not have to fight every type warning to the death, but don’t introduce obvious new ones for no reason. If you can’t get a clean run because of something strict, leave a short comment explaining why and move on.
 
-## Pull Request Guidelines
-Keep PRs **small and focused**, one feature/fix per PR. For large features or changes, open an issue first for discussion.
+## Testing 🧪
+The CI pipeline **will enforce** passing tests. Before submitting, please ensure these pass locally:
+```bash
+# Run the full suite
+pytest
+```
 
-#### To get started:
-1. Fork the repo.
-2. Clone your fork.
-3. Create a branch, commit your changes, and push.
-4. Open a PR to `main` on the original repo.
+The pipeline consists of:
+- **test_sage.py**: CLI smoke tests.
+- **test_sage_math_santizer.py**: Logic verification.
 
-#### In your PR description, include:
-1. What problem this solves.
-2. What has changed.
-3. How you tested the change (commands & environment).
+## In Summary...
+Run `ruff`, `pyright`, and `pytest`. If all pass, you are golden! Open a PR and it will be reviewed.
