@@ -2,7 +2,7 @@
 Thank you for considering contributing! Expectations are quite simple. Keep changes small and focused, and do not blow up the UX.
 
 ## Expectations 📝
-- **Python Version:** Dependency based, currently 3.9+.
+- **Python Version:** Dependency based, currently 3.10+.
 - **Scope:** One feature or fix per PR. If it's a big change, please open an issue first.
 - **Description:** A rundown on your PR.
 
