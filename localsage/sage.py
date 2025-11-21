@@ -195,7 +195,7 @@ class Config:
 
     @property
     def alias_name(self) -> str:
-        """Returns the model name for use in Chat"""
+        """Returns the profile name for use in Chat"""
         return self.active()["alias"]
 
 
