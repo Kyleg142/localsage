@@ -14,17 +14,17 @@
 ## About 🔎
 Local Sage is an open-source CLI for chatting with LLMs. Not automation, not agents, just pure dialogue. 
 
-Featuring **synchronous live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested extensively with local LLMs hosted via **llama.cpp**.
+Featuring **live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested extensively with local LLMs hosted via **llama.cpp**.
 
 #### What else makes **Local Sage** shine? ✨
-- Conversations that exist right in your terminal viewport via **gorgeous live Rich panels**.
+- Conversations that render directly to standard output and persist in your shell.
 - Fancy prompts with **command completion** and **in-memory history**.
 - **Context-aware file management.** See the [Under the Hood](#under-the-hood-%EF%B8%8F) section for more info!
 - Small but mighty, below 2000 lines of **Python** 🐍.
 
 #### Plus everything you'd expect from a solid chat frontend.
 - **Session management**: load, save, delete, reset, and summarize sessions.
-- **Profile management**: save, delete, and switch between models and endpoints.
+- **Profile management**: save, delete, and switch model profiles.
 - Reasoning/Chain-of-thought support with a dedicated Reasoning panel.
 - Context length monitoring via **tiktoken**, shown through a subtle status panel.
 
@@ -50,7 +50,14 @@ pipx install localsage
 ```
 Type **`localsage`** into your terminal to launch the CLI. Type **`!h`** to view command usage.
 
+### Getting Started ✔️
 Configuration is done entirely through interactive commands. You never have to touch a config file.
+1. Configure a profile with `!addprofile`.
+2. Use `!ctx` to set your context length.
+3. Use `!prompt` to set your own system prompt.
+4. (Optional) Set an API key with `!key`.
+
+**Tip:** If you press `tab` while at the main prompt, you can access a command completer for easy command use.
 
 ### Dependencies 🧰
 Local Sage is designed with minimal dependencies, keeping the download light and minimizing library bloat.
@@ -89,14 +96,11 @@ You can adjust the refresh rate using the `!rate` command (30 FPS by default).
 ## Limitations 🛑
 Once the live panel group fills the terminal viewport, real-time rendering cannot continue due to terminal constraints. By default, the Response panel consumes the Reasoning panel to conserve space (toggleable with the `!consume` command).
 
-**This should only be an issue on large responses that consume over an entire viewport's worth of vertical space.**
+**This should only be noticeable on large responses that consume over an entire viewport's worth of vertical space.**
 
 **Local Sage is text-only.** This limitation keeps Local Sage portable, lightweight, and backend-agnostic.
 
 Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have to swap your API key with `!key`.
-
-## Notes & Acknowledgements 🫵
-Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
 
 ## Versioning 🔧
 Version **1.0.0** is the fully 'finished' release, containing full CLI functionality.
@@ -106,7 +110,7 @@ Version **1.0.0** is the fully 'finished' release, containing full CLI functiona
 ## License ⚖️
 Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
 
-## And lastly...
-I wanted to say thank you to the OSS community! Without all of your wonderful creations, I never would have had the inspiration to create something myself.
+## Closing Notes 🫵
+Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
 
 Contributions are always welcome! See [**Contributing**](https://github.com/Kyleg142/localsage/blob/main/.github/CONTRIBUTING.md).
