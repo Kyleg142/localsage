@@ -17,7 +17,7 @@ Local Sage is an open-source CLI for chatting with LLMs. Not automation, not age
 Featuring **live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested with local LLMs hosted via **llama.cpp**.
 
 #### What else makes **Local Sage** shine? ✨
-- Conversations that render directly to standard output and persist in your shell.
+- **Conversations live in your shell**, rendering directly to standard output for persistent history.
 - Fancy prompts with **command completion** and **in-memory history**.
 - **Context-aware file management.** See the [Under the Hood](#under-the-hood-%EF%B8%8F) section for more info!
 - Small but mighty, below 2000 lines of **Python** 🐍.
@@ -26,9 +26,9 @@ Featuring **live Markdown rendering with inline math conversion** for a *silky s
 - **Session management**: load, save, delete, reset, and summarize sessions.
 - **Profile management**: save, delete, and switch model profiles.
 - Reasoning/Chain-of-thought support with a dedicated Reasoning panel.
-- Context length monitoring via **tiktoken**, shown through a subtle status panel.
+- Context length monitoring, shown through a subtle status panel.
 
-There is also collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from to customize your sessions!
+There is also a collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from to customize your sessions!
 
 ## Compatibility 🔩
 **Python 3.10** or later required.
