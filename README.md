@@ -14,7 +14,7 @@
 ## About 🔎
 Local Sage is an open-source CLI for chatting with LLMs. Not automation, not agents, just pure dialogue. 
 
-Featuring **live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested extensively with local LLMs hosted via **llama.cpp**.
+Featuring **live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested with local LLMs hosted via **llama.cpp**.
 
 #### What else makes **Local Sage** shine? ✨
 - Conversations that render directly to standard output and persist in your shell.
