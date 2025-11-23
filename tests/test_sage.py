@@ -69,9 +69,10 @@ def test_chat_initialization(mock_get_pass, mock_openai):
 
     # Create a dummy config
     cfg = sage.Config()
+    sesh = sage.SessionManager(cfg)
 
     # Initialize Chat
-    session = sage.Chat(cfg)
+    session = sage.Chat(cfg, sesh)
 
     # Assertions
     assert session.client is not None

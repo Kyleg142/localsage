@@ -199,20 +199,146 @@ class Config:
         return self.active()["alias"]
 
 
+class SessionManager:
+    """
+    Handles session management
+    - Session-related I/O
+    - Session history management
+    - Token caching
+    """
+
+    def __init__(self, config: Config):
+        self.config: Config = config
+        self.history: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": self.config.system_prompt}
+        ]
+        self.active_session: str = ""
+        self.encoder = tiktoken.get_encoding("cl100k_base")
+        self.token_cache: list[tuple[str, int] | None] = []
+
+    def save_to_disk(self, filepath: str):
+        """Save the current session to disk"""
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(self.history, f, indent=2)
+        self.active_session = filepath
+
+    def load_from_disk(self, filepath: str):
+        """Load session file from disk"""
+        with open(filepath, "r", encoding="utf-8") as f:
+            self.history = json.load(f)
+        self.active_session = filepath
+
+    def delete_file(self, filepath: str):
+        """Used to remove a session file"""
+        os.remove(filepath)
+
+    def append_message(self, role: str, content: str):
+        """Append content to the conversation history"""
+        self.history.append({"role": role, "content": content})  # pyright: ignore
+
+    def correct_history(self):
+        if self.history and self.history[-1]["role"] == "user":
+            _ = self.history.pop()
+
+    def reset_session(self):
+        """Reset the current session state"""
+        self.history = [{"role": "system", "content": self.config.system_prompt}]
+        self.active_session = ""
+        self.token_cache = []
+
+    def reset_with_summary(self, summary_text: str):
+        """
+        Wipes the session and starts fresh with a summary.
+        """
+        # 1. Clear tokens and active file
+        self.active_filename = ""
+        self.token_cache = []
+
+        # 2. Rebuild history structure strictly
+        self.history = [
+            {"role": "system", "content": self.config.system_prompt},
+            {
+                "role": "system",
+                "content": "This summary represents the previous session.",
+            },
+            {"role": "assistant", "content": summary_text},
+        ]
+
+    def list_sessions(self):
+        """Lists all sessions that exist within SESSIONS_DIR"""
+        sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
+        if not sessions:
+            console.print("[dim]No saved sessions found.[/dim]\n")
+            return False
+        console.print("[cyan]Available sessions:[/cyan]")
+        for s in sorted(sessions):
+            console.print(f"• {s}", highlight=False)
+        console.print()
+        return True
+
+    def count_tokens(self) -> int:
+        """Counts and caches tokens."""
+        # Ensure cache aligns with current conversation history length
+        if len(self.token_cache) > len(self.history):
+            self.token_cache = self.token_cache[: len(self.history)]
+        while len(self.token_cache) < len(self.history):
+            self.token_cache.append(None)
+        total = 0
+
+        # Start counting tokens
+        for i, msg in enumerate(self.history):
+            raw_content = msg.get("content")
+            text: str
+            # Process raw_content depending on it's type
+            if raw_content is None:
+                text = ""
+            elif isinstance(raw_content, str):
+                text = raw_content
+            elif isinstance(raw_content, list):
+                parts = [p.get("text", "") for p in raw_content if isinstance(p, dict)]
+                text = " ".join(parts) if parts else ""
+            else:
+                text = str(raw_content)
+            cached = self.token_cache[i]
+            if cached is None or cached[0] != text:
+                try:
+                    token_count = len(self.encoder.encode(text))
+                # Cache protection, to deter critical exceptions
+                except Exception:
+                    token_count = 0
+                self.token_cache[i] = (text, token_count)  # Expand the cache
+                total += token_count
+            else:
+                total += cached[1]
+        return total
+
+    def _json_helper(self, file_name: str) -> str:
+        """
+        JSON extension helper.
+
+        Used throughout most session management methods.
+        """
+        if not file_name.endswith(".json"):
+            file_name += ".json"
+        file_path = os.path.join(SESSIONS_DIR, file_name)
+        return file_path
+
+
+class ProfileManager:
+    """Handles model profile management"""
+
+
 class Chat:
     """Houses the main application logic for Local Sage"""
 
     # <~~INTIALIZATION & GENERIC HELPERS~~>
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, session: SessionManager):
         """Initializes all variables for Chat"""
 
         # Imports configuration variables from the Config class
         self.config: Config = config
 
-        # Conversation history list, initialized with the current system prompt
-        self.conversation_history: list[ChatCompletionMessageParam] = [
-            {"role": "system", "content": self.config.system_prompt}
-        ]
+        self.session: SessionManager = session
 
         # Placeholder for live display object
         self.live: Live | None = None
@@ -252,9 +378,6 @@ class Chat:
         self.reasoning_buffer: list[str] = []
         self.response_buffer: list[str] = []
 
-        # Loaded session name
-        self.loaded_session_name: str = ""
-
         # Collectors for output content, appended by the buffers
         self.full_response_content: str = ""
         self.full_reasoning_content: str = ""
@@ -262,10 +385,8 @@ class Chat:
         # Baseline timer for the rendering loop
         self.last_update_time: float = time.monotonic()
 
-        # Tokenization and context management
+        # Holds the total token amount for display
         self.total_tokens: int = 0
-        self.token_cache: list[tuple[str, int] | None] = []
-        self.encoder: tiktoken.Encoding = tiktoken.get_encoding("cl100k_base")
 
         # Terminal height and panel scaling
         self.max_height: int = 0
@@ -299,7 +420,7 @@ class Chat:
                 return False
             # Command detection
             if user_message.lower() in ["!q", "!quit"]:  # Quit
-                if len(self.conversation_history) > 1:
+                if len(self.session.history) > 1:
                     choice = (
                         prompt(
                             HTML(
@@ -316,7 +437,7 @@ class Chat:
                             continue
                 return False
             if user_message.lower() in ["!l", "!load"]:  # Load
-                if len(self.conversation_history) > 1:
+                if len(self.session.history) > 1:
                     choice = (
                         prompt(
                             HTML(
@@ -336,7 +457,7 @@ class Chat:
                 console.print()
                 continue
             if user_message.lower() in ["!sessions"]:  # List sessions
-                self.list_sessions()
+                self.session.list_sessions()
                 continue
             if user_message.lower() in ["!delete"]:  # Delete a session
                 self.delete_session()
@@ -386,7 +507,7 @@ class Chat:
                     )
                 continue
             if user_message.lower() in ["!sum", "!summary"]:  # Prompt for a summary
-                if len(self.conversation_history) > 1:
+                if len(self.session.history) > 1:
                     try:
                         choice = (
                             prompt(
@@ -434,7 +555,7 @@ class Chat:
                 continue
 
             # User input is appended to the conversation history list if a command was not used
-            self.conversation_history.append({"role": "user", "content": user_message})
+            self.session.append_message("user", user_message)
             # New height is set, in case the user resized their terminal window during the prompt
             self._terminal_height_setter()
             console.print()
@@ -531,7 +652,7 @@ class Chat:
             self.init_rich_live()
             self.completion = self.client.chat.completions.create(
                 model=self.config.model_name,
-                messages=self.conversation_history,
+                messages=self.session.history,
                 stream=True,
             )
             # Parse incoming chunks, process them based on type, update panels
@@ -563,11 +684,7 @@ class Chat:
                 self.live.stop()
             if self.cancel_requested:
                 # If the user canceled the stream, remove their input.
-                if (
-                    self.conversation_history
-                    and self.conversation_history[-1]["role"] == "user"
-                ):
-                    _ = self.conversation_history.pop()
+                self.session.correct_history()
             if not self.cancel_requested:  # Normal completion
                 # Append the final response to history
                 self.append_history()
@@ -615,7 +732,7 @@ class Chat:
         """
         Updates rendered panel(s). Where the heavy lifting happens.
         - Renders at a hard-coded refresh rate that is in sync with the rich.live instance.
-        - 'Two-cylinder engine', gracefully concatenates content from two separate buffers.
+        - 'Two-cylinder engine', concatenates content from two separate buffers.
         - Performs math sanitization, markdown rendering, and stylized text rendering.
         """
         # Sets up the internal timer for frame-limiting
@@ -664,45 +781,7 @@ class Chat:
     def append_history(self):
         """Appends full response content to the conversation history"""
         if self.full_response_content:
-            self.conversation_history.append(
-                {"role": "assistant", "content": self.full_response_content}
-            )
-
-    def count_tokens(self) -> int:
-        """Counts and caches tokens."""
-        # Ensure cache aligns with current conversation history length
-        if len(self.token_cache) > len(self.conversation_history):
-            self.token_cache = self.token_cache[: len(self.conversation_history)]
-        while len(self.token_cache) < len(self.conversation_history):
-            self.token_cache.append(None)
-        total = 0
-
-        # Start counting tokens
-        for i, msg in enumerate(self.conversation_history):
-            raw_content = msg.get("content")
-            text: str
-            # Process raw_content depending on it's type
-            if raw_content is None:
-                text = ""
-            elif isinstance(raw_content, str):
-                text = raw_content
-            elif isinstance(raw_content, list):
-                parts = [p.get("text", "") for p in raw_content if isinstance(p, dict)]
-                text = " ".join(parts) if parts else ""
-            else:
-                text = str(raw_content)
-            cached = self.token_cache[i]
-            if cached is None or cached[0] != text:
-                try:
-                    token_count = len(self.encoder.encode(text))
-                # Cache protection, to deter critical exceptions
-                except Exception:
-                    token_count = 0
-                self.token_cache[i] = (text, token_count)  # Expand the cache
-                total += token_count
-            else:
-                total += cached[1]
-        return total
+            self.session.append_message("assistant", self.full_response_content)
 
     # <~~PANELS & CHARTS~~>
     def spawn_intro_panel(self):
@@ -787,7 +866,7 @@ class Chat:
 
         Also calculates total_tokens at the end of every context-consuming interaction.
         """
-        self.total_tokens = self.count_tokens()
+        self.total_tokens = self.session.count_tokens()
         context_percentage = round(
             (self.total_tokens / self.config.context_length) * 100, 1
         )
@@ -806,7 +885,7 @@ class Chat:
                 self.context_flag = False
 
         # Turn counter
-        turns = sum(1 for m in self.conversation_history if m["role"] == "user")
+        turns = sum(1 for m in self.session.history if m["role"] == "user")
 
         # Status panel content
         status_text = Text.assemble(
@@ -1124,8 +1203,8 @@ class Chat:
     # <~~SESSION MANAGEMENT~~>
     def save_session(self):
         """Saves a session to a .json file"""
-        if self.loaded_session_name:
-            file_name = self.loaded_session_name
+        if self.session.active_session:
+            file_name = self.session.active_session
         else:
             try:
                 file_name = prompt(SESSION_PROMPT)
@@ -1137,11 +1216,9 @@ class Chat:
             console.print("[dim]Saving canceled. No name entered.[/dim]")
             return
 
-        file_path = self._json_helper(file_name)
+        file_path = self.session._json_helper(file_name)
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(self.conversation_history, f, indent=2)
-            self.loaded_session_name = file_name
+            self.session.save_to_disk(file_path)
             console.print(f"[green]Session saved in:[/green] {file_path}")
         except Exception as e:
             log_exception(
@@ -1153,7 +1230,7 @@ class Chat:
     def load_session(self):
         """Loads a session from a .json file"""
         try:
-            if not self.list_sessions():
+            if not self.session.list_sessions():
                 return
             file_name = prompt(
                 SESSION_PROMPT,
@@ -1168,11 +1245,9 @@ class Chat:
             console.print("[dim]Saving canceled. No name entered.[/dim]\n")
             return
 
-        file_path = self._json_helper(file_name)
+        file_path = self.session._json_helper(file_name)
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                self.conversation_history = json.load(f)
-            self.loaded_session_name = file_name
+            self.session.load_from_disk(file_path)
             self.context_flag = True
             self._resurrect_session()
             console.print(f"[green]Session loaded from:[/green] {file_path}")
@@ -1189,22 +1264,10 @@ class Chat:
             )
             spawn_error_panel("ERROR LOADING", f"{e}")
 
-    def list_sessions(self):
-        """Lists all sessions that exist within SESSIONS_DIR"""
-        sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
-        if not sessions:
-            console.print("[dim]No saved sessions found.[/dim]\n")
-            return False
-        console.print("[cyan]Available sessions:[/cyan]")
-        for s in sorted(sessions):
-            console.print(f"• {s}", highlight=False)
-        console.print()
-        return True
-
     def delete_session(self):
         """Session deleter. Also lists files for user friendliness."""
         try:
-            if not self.list_sessions():
+            if not self.session.list_sessions():
                 return
             file_name = prompt(
                 SESSION_PROMPT,
@@ -1219,11 +1282,11 @@ class Chat:
             console.print("[dim]Deletion canceled. No name entered.[/dim]\n")
             return
 
-        file_path = self._json_helper(file_name)
+        file_path = self.session._json_helper(file_name)
         try:
-            os.remove(file_path)  # Remove the session file
-            if self.loaded_session_name == file_name:
-                self.loaded_session_name = ""
+            self.session.delete_file(file_path)  # Remove the session file
+            if self.session.active_session == file_name:
+                self.session.active_session = ""
             console.print(f"[green]Session deleted:[/green] {file_path}\n")
         except FileNotFoundError:
             console.print(f"[red]No session file found:[/red] {file_path}\n")
@@ -1237,12 +1300,7 @@ class Chat:
     def reset_session(self):
         """Simple session resetter."""
         # Start a new conversation history list with the system prompt
-        self.conversation_history = [
-            {"role": "system", "content": self.config.system_prompt}
-        ]
-        # Reset session-based variables
-        self.total_tokens = 0
-        self.loaded_session_name = ""
+        self.session.reset_session()
         self.context_flag = True
         console.print("[green]The current session has been reset successfully.[/green]")
         self.spawn_status_panel()
@@ -1257,15 +1315,16 @@ class Chat:
             "Summarize the full conversation for use in a new session."
             "Include the main goals, steps taken, and results achieved."
         )
-        self.conversation_history.append({"role": "user", "content": summary_prompt})
+        self.session.append_message("user", summary_prompt)
+        self.cancel_requested = False
         try:
             # Just the regular streaming loop, patched in for the summarization process. See stream_response()
+            self.init_rich_live()
             self.completion = self.client.chat.completions.create(
                 model=self.config.model_name,
-                messages=self.conversation_history,
+                messages=self.session.history,
                 stream=True,
             )
-            self.init_rich_live()
             for chunk in self.completion:
                 self.chunk_parse(chunk)
                 self.spawn_reasoning_panel()
@@ -1273,54 +1332,27 @@ class Chat:
                 self.update_renderables()
             time.sleep(0.02)  # Small timeout before buffers are flushed
             self.buffer_flusher()
-            # Append the summary to history
-            self.append_history()
-            # Stop the live display
             if self.live:
                 self.live.stop()
-            # Corrects the conversation history if streaming got interrupted
-            # Wrote history correction here differently than stream_response(). Both variants are functionally the same.
-            if (
-                not self.conversation_history
-                or self.conversation_history[-1]["role"] != "assistant"
-            ):
-                if self.conversation_history[-1]["role"] == "user":
-                    _ = self.conversation_history.pop()
-                    self._mini_slate_cleaner()
-                console.print(
-                    "[red]Summary generation incomplete or interrupted.[/red]\n"
-                )
-                return
             # Grab the summary from conversation history
-            summary_text: str = self.conversation_history[-1]["content"]  # pyright: ignore[reportAssignmentType, reportTypedDictNotRequiredAccess]
+            summary_text = self.full_response_content
             # Reset the session state entirely, scorched-earth
             self._mini_slate_cleaner()
             self.loaded_session_name = ""
-            self.total_tokens = 0
             self.context_flag = True
             # Start a new session and deliver the summary, starting with the system prompt
-            self.conversation_history = [
-                {"role": "system", "content": self.config.system_prompt},
-                {
-                    "role": "system",
-                    "content": "This summary represents the previous session.",
-                },
-                {"role": "assistant", "content": summary_text},
-            ]
+            self.session.reset_with_summary(summary_text)
             console.print(
                 "[green]Summarization complete! Your new session is primed and ready.[/green]"
             )
             # Spawn the status panel, showing proof that the user is now in a new session
             self.spawn_status_panel()
-        # Support for safe Ctrl + C interruption
         except KeyboardInterrupt:
             self._mini_slate_cleaner()
             if self.live:
                 self.live.update(Group(*self.renderables_to_display))
                 self.live.stop()
-            # Remove the user's prompt from history
-            if self.conversation_history[-1]["role"] == "user":
-                _ = self.conversation_history.pop()
+            self.cancel_requested = True
             return
         # Error catcher
         except Exception as e:
@@ -1328,17 +1360,19 @@ class Chat:
             if self.live:
                 self.live.stop()
             spawn_error_panel("SUMMARIZATION ERROR", f"{e}")
+            self.cancel_requested = True
             return
         finally:
-            # And lastly, always ensure the live display is stopped
             if self.live:
                 self.live.stop()
+            if self.cancel_requested:
+                self.session.correct_history()
 
     def _resurrect_session(self):
         """
         Utilized by load_session() to print a scrollable history.
         """
-        for msg in self.conversation_history:
+        for msg in self.session.history:
             role = msg.get("role", "unknown")
             content = (msg.get("content") or "").strip()  # type: ignore
             if not content:
@@ -1349,17 +1383,6 @@ class Chat:
             elif role == "assistant":
                 # Print an assistant panel for assistant messages
                 self.spawn_assistant_panel(content)
-
-    def _json_helper(self, file_name: str) -> str:
-        """
-        JSON extension helper.
-
-        Used throughout most session management methods.
-        """
-        if not file_name.endswith(".json"):
-            file_name += ".json"
-        file_path = os.path.join(SESSIONS_DIR, file_name)
-        return file_path
 
     def _session_completer(self):
         """Session completion helper for prompt_toolkit"""
@@ -1436,10 +1459,10 @@ class Chat:
         # If the file exists already in context, delete it.
         if existing:
             index = existing[-1][0]
-            self.conversation_history.pop(index)
+            self.session.history.pop(index)
             console.print(f"{filename} [yellow]is being updated in context...[/yellow]")
         # Add the file's content to context, wrapped in Markdown for retrieval
-        self.conversation_history.append({"role": "user", "content": wrapped})
+        self.session.history.append({"role": "user", "content": wrapped})
         console.print(f"{filename} [green]read and added to context.[/green]")
         # Print out the status panel, show updated context consumption
         self.spawn_status_panel()
@@ -1483,7 +1506,7 @@ class Chat:
         for idx, kind, name in reversed(attachments):
             if choice.lower().strip() == name.lower():
                 # Remove the attachment by index from the conversation history list
-                _ = self.conversation_history.pop(idx)
+                _ = self.session.history.pop(idx)
                 console.print(
                     f"[green]{kind.capitalize()}[/green] '{name}' [green]removed.[/green]"
                 )
@@ -1496,7 +1519,7 @@ class Chat:
         """Retrieves a list of all attachments by utilizing compiled regex."""
         attachments: list[tuple[int, str, str]] = []
         # Iterate through all messages in the conversation history
-        for i, msg in enumerate(self.conversation_history):
+        for i, msg in enumerate(self.session.history):
             content = msg.get("content")
             # Only process messages where "content" is a string.
             if isinstance(content, str):
@@ -1537,12 +1560,13 @@ def main():
         )
         with Live(spinner, refresh_per_second=8, console=console):
             init_logger()  # Initialize the log file
-            config = Config()  # Defines 'config' as our configuration object
+            config = Config()
+            session = SessionManager(config)
             try:
                 config.load()  # Loads config variables from file
             except FileNotFoundError:
                 config.save()  # Generates a config file if one does not exist
-            session = Chat(config)  # Defines 'session' as our primary object
+            session = Chat(config, session)  # Defines 'session' as our primary object
         console.clear()  # Clears the viewport
         session.run()  # Runs the application
         config.save()  # Saves config on exit
