@@ -1556,12 +1556,12 @@ def main():
         with Live(spinner, refresh_per_second=8, console=console):
             init_logger()  # Initialize the log file
             config = Config()
-            session = SessionManager(config)
+            session_manager = SessionManager(config)
             try:
                 config.load()  # Loads config variables from file
             except FileNotFoundError:
                 config.save()  # Generates a config file if one does not exist
-            session = Chat(config, session)  # Defines 'session' as our primary object
+            session = Chat(config, session_manager)
         console.clear()  # Clears the viewport
         session.run()  # Runs the application
         config.save()  # Saves config on exit
