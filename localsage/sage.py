@@ -123,23 +123,48 @@ COMPLETER_STYLER = Style.from_dict(
 # Alternative, allows whitespace: ^---\s*File:\s*(.+?)
 FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
 
+# Custom completer
+COMMAND_COMPLETER = WordCompleter(
+    [
+        "!a",
+        "!addprofile",
+        "!attach",
+        "!attachments",
+        "!clear",
+        "!config",
+        "!consume",
+        "!ctx",
+        "!delete",
+        "!h",
+        "!help",
+        "!key",
+        "!l",
+        "!load",
+        "!profiles",
+        "!prompt",
+        "!purge",
+        "!q",
+        "!quit",
+        "!rate",
+        "!removeprofile",
+        "!reset",
+        "!s",
+        "!save",
+        "!sessions",
+        "!sum",
+        "!summary",
+        "!switch",
+        "!theme",
+    ],
+    match_middle=True,
+    WORD=True,
+)
+
 # Terminal intergration
 console = Console()
 
 
-def spawn_error_panel(error: str, exception: str):
-    """Error panel template for Local Sage, used in Chat() and main()"""
-    error_panel = Panel(
-        exception,
-        title=Text(f"❌ {error}", style="bold red"),
-        title_align="left",
-        border_style="red",
-        expand=False,
-    )
-    console.print(error_panel)
-    console.print()
-
-
+# <~~CONFIG STATE~~>
 class Config:
     """
     User-facing configuration variables.
@@ -199,6 +224,7 @@ class Config:
         return self.active()["alias"]
 
 
+# <~~SESSION STATE~~>
 class SessionManager:
     """
     Handles session management
@@ -240,7 +266,7 @@ class SessionManager:
         if self.history and self.history[-1]["role"] == "user":
             _ = self.history.pop()
 
-    def reset_session(self):
+    def reset(self):
         """Reset the current session state"""
         self.history = [{"role": "system", "content": self.config.system_prompt}]
         self.active_session = ""
@@ -259,17 +285,10 @@ class SessionManager:
             {"role": "assistant", "content": summary_text},
         ]
 
-    def list_sessions(self):
+    def find_sessions(self) -> list[str]:
         """Lists all sessions that exist within SESSIONS_DIR"""
         sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
-        if not sessions:
-            console.print("[dim]No saved sessions found.[/dim]\n")
-            return False
-        console.print("[cyan]Available sessions:[/cyan]")
-        for s in sorted(sessions):
-            console.print(f"• {s}", highlight=False)
-        console.print()
-        return True
+        return sorted(sessions)
 
     def count_tokens(self) -> int:
         """Counts and caches tokens."""
@@ -318,22 +337,757 @@ class SessionManager:
         file_path = os.path.join(SESSIONS_DIR, file_name)
         return file_path
 
+    def _session_completer(self):
+        """Session completion helper for prompt_toolkit"""
+        return WordCompleter(
+            [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")],
+            ignore_case=True,
+            sentence=True,
+        )
 
-class ProfileManager:
-    """Handles model profile management"""
+
+class FileManager:
+    """
+    Handles file management.
+    - Attachment related I/O
+    - Attachment history manipulation
+    """
+
+    def __init__(self, session: SessionManager):
+        self.session: SessionManager = session
+
+    def process_file(self, path: str) -> bool:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            with open(path, "r", encoding="latin-1") as f:
+                content = f.read()
+
+        content = content.replace("```", "ʼʼʼ")
+        filename = os.path.basename(path)
+        wrapped = f"---\nFile: `{os.path.basename(path)}`\n```\n{content}\n```\n---"
+        existing = [(i, t, n) for i, t, n in self._get_attachments() if n == filename]
+        is_update = False
+
+        # If the file exists already in context, delete it.
+        if existing:
+            index = existing[-1][0]
+            self.session.history.pop(index)
+            is_update = True
+        # Add the file's content to context, wrapped in Markdown for retrieval
+        self.session.append_message("user", wrapped)
+        return is_update
+
+    def remove_attachment(self, target_name: str) -> str | None:
+        """Removes an attachment by name."""
+        attachments = self._get_attachments()
+        for idx, kind, name in reversed(attachments):
+            if target_name.lower().strip() == name.lower():
+                self.session.history.pop(idx)  # Remove the attachment by index
+                return kind  # For the UI to catch
+        return None
+
+    def _get_attachments(self) -> list[tuple[int, str, str]]:
+        """Retrieves a list of all attachments by utilizing compiled regex."""
+        attachments: list[tuple[int, str, str]] = []
+        # Iterate through all messages in the conversation history
+        for i, msg in enumerate(self.session.history):
+            content = msg.get("content")
+            if isinstance(content, str):
+                match = FILE_PATTERN.match(content)
+                if match:
+                    # Append each attachment to a new structured list
+                    attachments.append((i, "file", match.group(1)))
+        return attachments
+
+    def _file_validator(self, text: str) -> bool:
+        """File validation helper for prompt_toolkit"""
+        # Boiled down to two lines, simply validates that a file exists
+        text = os.path.abspath(os.path.expanduser(text))
+        return os.path.isfile(text)
 
 
+# <~~COMMAND LOGIC~~>
+class CommandHandler:
+    """Handles and supports all command input"""
+
+    def __init__(
+        self, config: Config, session: SessionManager, filemanager: FileManager
+    ):
+        self.config: Config = config
+        self.session: SessionManager = session
+        self.filemanager: FileManager = filemanager
+        self.filepath_history = InMemoryHistory()
+        self.interface = None
+
+        # Command dict (seriously rocks, much better than an 'if block' mess)
+        self.commands = {
+            "!h": self.spawn_help_chart,
+            "!help": self.spawn_help_chart,
+            "!s": self.save_session,
+            "!save": self.save_session,
+            "!l": self.load_session,
+            "!load": self.load_session,
+            "!a": self.attach_file,
+            "!attach": self.attach_file,
+            "!purge": self.purge_attachment,
+            "!consume": self.toggle_consume,
+            "!sessions": self.list_sessions,
+            "!delete": self.delete_session,
+            "!reset": self.reset_session,
+            "!sum": self.summarize_session,
+            "!summary": self.summarize_session,
+            "!config": self.spawn_settings_chart,
+            "!clear": console.clear,
+            "!profiles": self.list_models,
+            "!addprofile": self.add_model,
+            "!removeprofile": self.remove_model,
+            "!switch": self.switch_model,
+            "!q": sys.exit,
+            "!quit": sys.exit,
+            "!ctx": self.set_context_length,
+            "!rate": self.set_refresh_rate,
+            "!theme": self.set_code_theme,
+            "!key": self.set_api_key,
+            "!prompt": self.set_system_prompt,
+        }
+
+    def handle_input(self, user_input: str) -> bool | None | OpenAI:
+        """Parse user input for a command & handle it"""
+        cmd = user_input.split()[0].lower()
+        if cmd in self.commands:
+            if (
+                cmd in ("!q", "!quit", "!sum", "!summarize", "!l", "!load")
+                and len(self.session.history) > 1
+            ):
+                choice = (
+                    prompt(
+                        HTML(
+                            "Save first? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
+                        )
+                    )
+                    .lower()
+                    .strip()
+                )
+                if choice in ("y", "yes"):
+                    self.save_session()
+            if cmd in ("!q", "!quit"):
+                console.print("[yellow]✨ Farewell![/yellow]\n")
+            return self.commands[cmd]()
+        return False  # No command detected
+
+    def set_interface(self, chat_interface):
+        """Setter to inject the Chat/Renderer instance."""
+        self.interface = chat_interface
+
+    # <~~CHARTS~~>
+    def spawn_help_chart(self):
+        """Markdown usage chart."""
+        help_markdown = Markdown(
+            textwrap.dedent("""
+            | **Profile Management** | *Manage multiple models & API endpoints* |
+            | --- | ----------- |
+            | `!addprofile` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
+            | `!removeprofile` | Remove an existing profile. |
+            | `!profiles` | List configured profiles. |
+            | `!switch` | Switch between profiles. |
+
+            | **Configuration** | *Main configuration commands* |
+            | --- | ----------- |
+            | `!config` | Display your current configuration settings and default directories. |
+            | `!consume` | Toggle Reasoning panel consumption.  |
+            | `!ctx` | Set maximum context length (for CLI functionality). |
+            | `!key` | Set an API key, if needed. Your API key is stored in your OS keychain. |
+            | `!prompt` | Set a new system prompt. Takes effect on your next session. |
+            | `!rate` | Set the current refresh rate (default is 30). Higher refresh rate = higher CPU usage. |
+            | `!theme` | Change your Markdown theme. Built-in themes can be found at https://pygments.org/styles/ |
+
+            | **Session Management** | *Session management commands* |
+            | --- | ----------- |
+            | `!s` or `!save` | Save the current session. |
+            | `!l` or `!load` | Load a saved session, including a scrollable conversation history. |
+            | `!sum` or `!summary` | Prompt your model for summarization and start a fresh session with the summary. |
+            | `!reset` | Reset for a fresh session. |
+            | `!delete` | Delete a saved session. |
+            | `!sessions` | List all saved sessions. |
+            | `!clear` | Clear the terminal window. |
+            | `!q` or `!quit` | Exit Local Sage. |
+            | | |
+            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the main prompt. Also acts as an immediate exit. |
+            | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
+
+            | **File Management** | *Commands for attaching and managing files* |
+            | --- | ----------- |
+            | `!a` or `!attach` | Attaches a file to the current session. |
+            | `!attachments` | List all current attachments. |
+            | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
+            | | |
+            | **FILE TYPES:** | All text-based file types are acceptable. |
+            | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
+            """)
+        )
+        console.print(help_markdown)
+        console.print()
+
+    def spawn_settings_chart(self):
+        """Markdown settings chart."""
+        settings_markdown = Markdown(
+            textwrap.dedent(f"""
+            | **Current Settings** | *Your current persistent settings* |
+            | --- | ----------- |
+            | **System Prompt**: | *{self.config.system_prompt}* |
+            | | |
+            | **Context Length**: | *{self.config.context_length}* |
+            | | |
+            | **Refresh Rate**: | *{self.config.refresh_rate}* |
+            | | |
+            | **Markdown Theme**: | *{self.config.rich_code_theme}* |
+            - Your configuration file is located at: `{CONFIG_FILE}`
+            - Your session files are located at:     `{SESSIONS_DIR}`
+            - Your error logs are located at:        `{LOG_DIR}`
+            """)
+        )
+        console.print(settings_markdown)
+        console.print()
+
+    # <~~MAIN CONFIG~~>
+    def set_system_prompt(self):
+        """Sets a new persistent system prompt within the config file."""
+        try:
+            sysprompt = prompt(HTML("Enter a system prompt<seagreen>:</seagreen> "))
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Edit canceled.[/dim]\n")
+            return
+
+        self.config.system_prompt = sysprompt
+        self.config.save()
+        console.print(f"[green]System prompt updated to:[/green] {sysprompt}")
+        console.print(
+            "[dim]Use [cyan]!reset[/cyan] to start a session with the new prompt. Be sure to [cyan]!save[/cyan] first, if desired.[/dim]"
+        )
+        console.print()
+
+    def set_context_length(self):
+        """Sets a new persistent context length"""
+        try:
+            ctx = prompt(HTML("Enter a max context length<seagreen>:</seagreen> "))
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Edit canceled.[/dim]\n")
+            return
+
+        if not ctx.strip():
+            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+            return
+
+        try:
+            value = int(ctx)
+            if value <= 0:
+                raise ValueError
+        except ValueError:
+            spawn_error_panel("VALUE ERROR", "Please enter a positive number.")
+            return
+
+        self.config.context_length = value
+        self.config.save()
+        console.print(f"[green]Context length set to:[/green] {value}\n")
+
+    def set_api_key(self):
+        """
+        Allows the user to set an API key.
+
+        SAFELY stores the user's API key with keyring
+        """
+        # API key is referenced in memory during runtime. Never stored in text or code.
+        # See how it is initialized in config.__init__ for further reference
+        try:
+            new_key = prompt(HTML("Enter an API key<seagreen>:</seagreen> ")).strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Edit canceled.[/dim]\n")
+            return None
+
+        if not new_key:
+            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+            return None
+
+        try:
+            set_password(
+                "LocalSageAPI", USER_NAME, new_key
+            )  # Store securely w/ keyring
+        except (KeyringError, ValueError, RuntimeError, OSError) as e:
+            spawn_error_panel("KEYRING ERROR", f"{e}")
+            return None
+        console.print("[green]API key updated.[/green]\n")
+        return OpenAI(base_url=self.config.endpoint, api_key=new_key)
+
+    def set_refresh_rate(self):
+        """Set a new custom refresh rate"""
+        try:
+            rate = prompt(HTML("Enter a refresh rate<seagreen>:</seagreen> "))
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Edit canceled.[/dim]\n")
+            return
+
+        if not rate.strip():
+            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+            return
+
+        try:
+            value = int(rate)
+            if value <= 3:
+                raise ValueError
+        except ValueError:
+            spawn_error_panel("VALUE ERROR", "Please enter a positive number ≥ 4.")
+            return
+
+        self.config.refresh_rate = value
+        self.config.save()
+        console.print(f"[green]Refresh rate set to:[/green] {value}\n")
+
+    def set_code_theme(self):
+        """Allows the user to change out the rich markdown theme"""
+        try:
+            theme = prompt(HTML("Enter a valid theme name<seagreen>:</seagreen> "))
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Edit canceled.[/dim]")
+            return
+
+        theme = theme.lower()  # All theme names are lowercase
+        if not theme.strip():
+            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+            return
+
+        self.config.rich_code_theme = theme
+        self.config.save()
+        console.print(f"[green]Your theme has been set to: [/green]{theme}\n")
+
+    def toggle_consume(self):
+        "Toggles reasoning panel consumption on or off"
+        self.config.reasoning_panel_consume = not self.config.reasoning_panel_consume
+        self.config.save()
+        state = "on" if self.config.reasoning_panel_consume else "off"
+        color = "green" if self.config.reasoning_panel_consume else "red"
+        console.print(
+            f"Reasoning panel consumption toggled [{color}]{state}[/{color}].\n"
+        )
+
+    # <~~MODEL MANAGEMENT~~>
+    def list_models(self):
+        """List all configured models."""
+        console.print("[cyan]Configured profiles:[/cyan]")
+        for m in self.config.models:
+            tag = "(active)" if m["alias"] == self.config.active_model else ""
+            console.print(f"• {m['alias']} → {m['name']} [{m['endpoint']}] {tag}")
+        console.print()
+
+    def add_model(self):
+        """Interactively add a model profile."""
+        try:
+            alias = prompt(HTML("Profile name<seagreen>:</seagreen> ")).strip()
+            name = prompt(HTML("Model name<seagreen>:</seagreen> ")).strip()
+            endpoint = prompt(HTML("API endpoint<seagreen>:</seagreen> ")).strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Profile addition canceled.[/dim]\n")
+            return
+
+        if not alias or not endpoint:
+            console.print(
+                "[red]Profile name and API endpoint are required fields.[/red]\n"
+            )
+            return
+
+        if any(m["alias"] == alias for m in self.config.models):
+            console.print(f"[red]Profile[/red] '{alias}' [red]already exists.[/red]\n")
+            return
+
+        self.config.models.append(
+            {
+                "alias": alias,
+                "name": name or "Unnamed",
+                "endpoint": endpoint,
+                "api_key": "stored",
+            }
+        )
+        self.config.save()
+        console.print(f"[green]Profile[/green] '{alias}' [green]added.[/green]\n")
+
+    def remove_model(self):
+        """Remove a model profile by alias."""
+        self.list_models()
+        try:
+            alias = prompt(HTML("Profile to remove<seagreen>:</seagreen> ")).strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Canceled.[/dim]\n")
+            return
+
+        if alias == self.config.active_model:
+            console.print("[red]The active profile cannot be removed.[/red]\n")
+            return
+
+        before = len(self.config.models)
+        self.config.models = [m for m in self.config.models if m["alias"] != alias]
+        if len(self.config.models) < before:
+            self.config.save()
+            console.print(f"[green]Profile[/green] '{alias}' [green]removed.[/green]\n")
+        else:
+            console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
+
+    def switch_model(self, alias=None) -> OpenAI | None:
+        """Switch active model profile by alias."""
+        if not alias:
+            self.list_models()
+            alias = prompt(HTML("Enter a profile name<seagreen>:</seagreen> ")).strip()
+
+        match = next((m for m in self.config.models if m["alias"] == alias), None)
+        if not match:
+            console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
+            return
+
+        self.config.active_model = alias
+        self.config.save()
+        console.print(
+            f"[green]Switched to:[/green] {match['name']} "
+            f"[dim]{match['endpoint']}[/dim]\n"
+        )
+        return OpenAI(
+            base_url=match["endpoint"], api_key=get_password("LocalSageAPI", USER_NAME)
+        )
+
+    # <~~SESSION MANAGEMENT~~>
+    def save_session(self):
+        """Saves a session to a .json file"""
+        if self.session.active_session:
+            file_name = self.session.active_session
+        else:
+            try:
+                file_name = prompt(SESSION_PROMPT)
+            except (KeyboardInterrupt, EOFError):
+                console.print("[dim]Saving canceled[/dim]\n")
+                return
+
+        if not file_name.strip():
+            console.print("[dim]Saving canceled. No name entered.[/dim]\n")
+            return
+
+        file_path = self.session._json_helper(file_name)
+        try:
+            self.session.save_to_disk(file_path)
+            console.print(f"[green]Session saved in:[/green] {file_path}\n")
+        except Exception as e:
+            log_exception(
+                e, f"Error in save_session() - file: {os.path.basename(file_path)}"
+            )
+            spawn_error_panel("ERROR SAVING", f"{e}")
+            return
+
+    def load_session(self):
+        """Loads a session from a .json file"""
+        try:
+            if not self.list_sessions():
+                return
+            file_name = prompt(
+                SESSION_PROMPT,
+                completer=self.session._session_completer(),
+                style=COMPLETER_STYLER,
+            )
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Loading canceled.[/dim]\n")
+            return
+
+        if not file_name.strip():
+            console.print("[dim]Saving canceled. No name entered.[/dim]\n")
+            return
+
+        file_path = self.session._json_helper(file_name)
+        try:
+            self.session.load_from_disk(file_path)
+            # Create scrollable history
+            if self.interface:
+                console.clear()
+                self.interface.reset_turn_state()
+                self.interface.render_history()
+            console.print(f"[green]Session loaded from:[/green] {file_path}")
+            spawn_status_panel(self.session, self.config)
+        except FileNotFoundError:
+            console.print(f"[red]No session file found:[/red] {file_path}\n")
+            return
+        except json.JSONDecodeError:
+            console.print(f"[red]Corrupted session file:[/red] {file_path}\n")
+            return
+        except Exception as e:
+            log_exception(
+                e, f"Error in load_session() — file: {os.path.basename(file_path)}"
+            )
+            spawn_error_panel("ERROR LOADING", f"{e}")
+
+    def delete_session(self):
+        """Session deleter. Also lists files for user friendliness."""
+        try:
+            if not self.list_sessions():
+                return
+            file_name = prompt(
+                SESSION_PROMPT,
+                completer=self.session._session_completer(),
+                style=COMPLETER_STYLER,
+            )
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]Deletion canceled.[/dim]\n")
+            return
+
+        if not file_name.strip():
+            console.print("[dim]Deletion canceled. No name entered.[/dim]\n")
+            return
+
+        file_path = self.session._json_helper(file_name)
+        try:
+            self.session.delete_file(file_path)  # Remove the session file
+            if self.session.active_session == file_name:
+                self.session.active_session = ""
+            console.print(f"[green]Session deleted:[/green] {file_path}\n")
+        except FileNotFoundError:
+            console.print(f"[red]No session file found:[/red] {file_path}\n")
+            return
+        except Exception as e:
+            log_exception(
+                e, f"Error in delete_session() — file: {os.path.basename(file_path)}"
+            )
+            spawn_error_panel("DELETION ERROR", f"{e}")
+
+    def reset_session(self):
+        """Simple session resetter."""
+        # Start a new conversation history list with the system prompt
+        self.session.reset()
+        console.print("[green]The current session has been reset successfully.[/green]")
+        spawn_status_panel(self.session, self.config)
+
+    def summarize_session(self):
+        """Sets up and triggers summarization"""
+        if not self.interface:
+            return
+
+        console.print("[yellow]Beginning summarization...[/yellow]\n")
+
+        summary_prompt = (
+            "Summarize the full conversation for use in a new session."
+            "Include the main goals, steps taken, and results achieved."
+        )
+
+        # Append the prompt temporarily
+        self.session.append_message("user", summary_prompt)
+        # Passes a callback to Chat.stream_response
+        self.interface.stream_response(callback=self._handle_summary_completion)
+
+    def _handle_summary_completion(self, summary_text: str):
+        """Callback executed by Chat after streaming finishes successfully."""
+        # Reset session, apply summary
+        self.session.reset_with_summary(summary_text)
+
+        # Clean up the turn state
+        if self.interface:
+            self.interface.reset_turn_state()
+            self.session.active_session = ""
+
+        console.print("[green]Summarization complete! New session primed.[/green]")
+        spawn_status_panel(self.session, self.config)
+
+    def list_sessions(self) -> bool:
+        """Fetches the session list and displays it."""
+        sessions = self.session.find_sessions()
+
+        if not sessions:
+            console.print("[dim]No saved sessions found.[/dim]\n")
+            return False
+
+        console.print("[cyan]Available sessions:[/cyan]")
+        for s in sessions:
+            console.print(f"• {s}", highlight=False)
+        console.print()
+        return True
+
+    # <~~FILE MANAGEMENT~~>
+    def attach_file(self):
+        """Command structure for reading a file from disk"""
+        # Setup for prompt_toolkit's validator and path completer
+        file_completer = PathCompleter(expanduser=True)
+        validator = Validator.from_callable(
+            self.filemanager._file_validator,
+            error_message="File does not exist.",
+            move_cursor_to_end=True,
+        )
+
+        try:
+            # Prompt for a filepath
+            path = prompt(
+                HTML("Enter file path<seagreen>:</seagreen> "),
+                completer=file_completer,
+                validator=validator,
+                validate_while_typing=False,
+                style=COMPLETER_STYLER,
+                history=self.filepath_history,
+            )
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]File read canceled.[/dim]\n")
+            return
+
+        # Normalize path input and check file size
+        path = os.path.abspath(os.path.expanduser(path))
+        max_size = 1_000_000  # 1 MB
+        file_size = os.path.getsize(path)
+        if file_size > max_size:
+            console.print(
+                f"[yellow]Warning:[/yellow] File is {file_size / 1_000_000:.2f} MB and may consume a large amount of context."
+            )
+            choice = (
+                prompt(
+                    HTML(
+                        "Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
+                    )
+                )
+                .lower()
+                .strip()
+            )
+            if choice not in ("y", "yes"):
+                console.print("[dim]Attachment canceled by user.[/dim]\n")
+                return
+        try:
+            is_update = self.filemanager.process_file(path)
+            filename = os.path.basename(path)
+            if is_update:
+                console.print(f"{filename} [green]has been updated in context.[/green]")
+            else:
+                console.print(f"{filename} [green]read and added to context.[/green]")
+            spawn_status_panel(self.session, self.config)
+        except Exception as e:
+            log_exception(e, "Error in process_file()")
+            spawn_error_panel("ERROR READING FILE", f"{e}")
+            return
+
+    def purge_attachment(self):
+        """
+        Purges files/images from context and recovers context length.
+        """
+        # Generate the attachment list
+        attachments = self.filemanager._get_attachments()
+        if not attachments:
+            console.print("[dim]No attachments found.[/dim]\n")
+            return
+        console.print("[cyan]Attachments in context:[/cyan]")
+        for _, kind, name in attachments:
+            console.print(f"• [{kind}] {name}")
+        console.print()
+
+        # Prompt for a file to purge
+        try:
+            choice = prompt(HTML("Enter file name to remove<seagreen>:</seagreen> "))
+        except (KeyboardInterrupt, EOFError):
+            console.print("[dim]File purge canceled.[/dim]\n")
+            return
+
+        # And purge the file from the session
+        removed_file = self.filemanager.remove_attachment(choice)
+        if removed_file:
+            console.print(
+                f"[green]{removed_file.capitalize()}[/green] '{choice}' [green]removed.[/green]"
+            )
+            spawn_status_panel(self.session, self.config)
+        else:
+            console.print(f"[red]No match found for:[/red] '{choice}'\n")
+
+
+# <~~UNIVERSAL PANELS~~>
+def spawn_intro_panel(config: Config):
+    """Simple welcome panel, prints on application launch."""
+    # Intro panel content
+    intro_text = Text.assemble(
+        ("Model: ", "bold sandy_brown"),
+        (f"{config.model_name}"),
+        ("\nProfile: ", "bold sandy_brown"),
+        (f"{config.alias_name}"),
+        ("\nSystem Prompt: ", "bold sandy_brown"),
+        (f"{config.system_prompt}", "italic"),
+    )
+
+    # Intro panel constructor
+    intro_panel = Panel(
+        intro_text,
+        title=Text(f"🔮 Local Sage {__version__}", "bold medium_orchid"),
+        title_align="left",
+        border_style="medium_orchid",
+        box=box.HORIZONTALS,
+        padding=(0, 0),
+    )
+
+    console.print(intro_panel)
+    console.print(Markdown("Type `!h` for a list of commands."))
+    console.print()
+
+
+def spawn_status_panel(session: SessionManager, config: Config):
+    """
+    Constructs and prints a status panel.
+    """
+    total_tokens = session.count_tokens()
+    context_percentage = round((total_tokens / config.context_length) * 100, 1)
+
+    # Colorize context percentage based on context consumption
+    context_color: str = "dim"
+    if context_percentage >= 50 and context_percentage < 80:
+        context_color = "yellow"
+    elif context_percentage >= 80:
+        context_color = "red"
+
+    # Turn counter
+    turns = sum(1 for m in session.history if m["role"] == "user")
+
+    # Status panel content
+    status_text = Text.assemble(
+        (" ", "cyan"),
+        ("Context: "),
+        (f"{context_percentage}%", f"{context_color}"),
+        (" | "),
+        (f"Turn: {turns}"),
+    )
+
+    # Status panel constructor
+    status_panel = Panel(
+        status_text,
+        border_style="dim",
+        style="dim",
+        expand=False,
+    )
+    console.print(status_panel)
+    console.print()
+
+
+def spawn_error_panel(error: str, exception: str):
+    """Error panel template for Local Sage, used in Chat() and main()"""
+    error_panel = Panel(
+        exception,
+        title=Text(f"❌ {error}", style="bold red"),
+        title_align="left",
+        border_style="red",
+        expand=False,
+    )
+    console.print(error_panel)
+    console.print()
+
+
+# <~~RENDERING~~>
 class Chat:
-    """Houses the main application logic for Local Sage"""
+    """Handles synchronized rendering. Couples chunk processing with Rich renderables."""
 
     # <~~INTIALIZATION & GENERIC HELPERS~~>
-    def __init__(self, config: Config, session: SessionManager):
+    def __init__(
+        self,
+        config: Config,
+        session: SessionManager,
+        filemanager: FileManager,
+    ):
         """Initializes all variables for Chat"""
 
-        # Imports configuration variables from the Config class
         self.config: Config = config
-
         self.session: SessionManager = session
+        self.filemanager: FileManager = filemanager
 
         # Placeholder for live display object
         self.live: Live | None = None
@@ -354,13 +1108,10 @@ class Chat:
         self.count_reasoning: bool = True
         self.count_response: bool = True
         self.cancel_requested: bool = False
-        self.context_flag: bool = True
 
         # Rich panels
         self.reasoning_panel: Panel = Panel("")
         self.response_panel: Panel = Panel("")
-        self.intro_panel: Panel = Panel("")
-        self.status_panel: Panel = Panel("")
 
         # Rich renderables (the rendered panel group)
         self.renderables_to_display: list[ConsoleRenderable] = []
@@ -380,182 +1131,10 @@ class Chat:
         # Baseline timer for the rendering loop
         self.last_update_time: float = time.monotonic()
 
-        # Holds the total token amount for display
-        self.total_tokens: int = 0
-
         # Terminal height and panel scaling
         self.max_height: int = 0
         self.reasoning_limit: int = 0
         self.response_limit: int = 0
-
-        # Prompt input history
-        self.main_history = InMemoryHistory()
-        self.filepath_history = InMemoryHistory()
-
-    def slate_cleaner(self):
-        """
-        Sets baseline values for each turn with it's sibling, _mini_slate_cleaner().
-
-        Houses the command structure and the main prompt.
-        """
-        # Variables are set to their baseline for the API call
-        self._mini_slate_cleaner()
-
-        while True:
-            # User is prompted for input
-            try:
-                user_message = prompt(
-                    PROMPT_PREFIX,
-                    completer=self._command_completer(),
-                    style=COMPLETER_STYLER,
-                    complete_while_typing=False,
-                    history=self.main_history,
-                )  # Prompts the user for input
-            except (KeyboardInterrupt, EOFError):  # Ctrl + c implementation for exiting
-                return False
-            # Command detection
-            if user_message.lower() in ["!q", "!quit"]:  # Quit
-                if len(self.session.history) > 1:
-                    choice = (
-                        prompt(
-                            HTML(
-                                "Save before quiting? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
-                            )
-                        )
-                        .lower()
-                        .strip()
-                    )
-                    if choice in ("y", "yes"):
-                        try:
-                            self.save_session()
-                        except Exception:
-                            continue
-                return False
-            if user_message.lower() in ["!l", "!load"]:  # Load
-                if len(self.session.history) > 1:
-                    choice = (
-                        prompt(
-                            HTML(
-                                "Loading a session will overwrite your active session.\nContinue? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
-                            )
-                        )
-                        .lower()
-                        .strip()
-                    )
-                    if choice not in ("y", "yes"):
-                        console.print("[dim]Load canceled by user.[/dim]\n")
-                        continue
-                self.load_session()
-                continue
-            if user_message.lower() in ["!s", "!save"]:  # Save
-                self.save_session()
-                console.print()
-                continue
-            if user_message.lower() in ["!sessions"]:  # List sessions
-                self.session.list_sessions()
-                continue
-            if user_message.lower() in ["!delete"]:  # Delete a session
-                self.delete_session()
-                continue
-            if user_message.lower() in ["!h", "!help"]:  # Command guide
-                self.spawn_help_panel()
-                continue
-            if user_message.lower() in ["!reset"]:  # Reset session
-                self.reset_session()
-                continue
-            if user_message.lower() in ["!key"]:  # API key
-                self.set_api_key()
-                continue
-            if user_message.lower() in ["!ctx"]:  # Context length
-                self.set_context_length()
-                continue
-            if user_message.lower() in ["!rate"]:  # Refresh rate
-                self.set_refresh_rate()
-                continue
-            if user_message.lower() in ["!prompt"]:  # System prompt
-                self.set_system_prompt()
-                continue
-            if user_message.lower() in ["!theme"]:  # Markdown theme
-                self.set_code_theme()
-                continue
-            if user_message.lower() in ["!a", "!attach"]:  # Attach a file
-                self.attach_file()
-                continue
-            if user_message.lower() in ["!attachments"]:  # List attachments
-                self.list_attachments()
-                continue
-            if user_message.lower() in ["!purge"]:  # Purge an attachment
-                self.purge_attachment()
-                continue
-            if user_message.lower() in ["!consume"]:  # Toggle panel consumption
-                self.config.reasoning_panel_consume = (
-                    not self.config.reasoning_panel_consume
-                )
-                self.config.save()
-                if self.config.reasoning_panel_consume:
-                    console.print(
-                        "Reasoning panel consumption toggled [green]on[/green].\n"
-                    )
-                else:
-                    console.print(
-                        "Reasoning panel consumption toggled [red]off[/red].\n"
-                    )
-                continue
-            if user_message.lower() in ["!sum", "!summary"]:  # Prompt for a summary
-                if len(self.session.history) > 1:
-                    try:
-                        choice = (
-                            prompt(
-                                HTML(
-                                    "Save the active session before summarization? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
-                                )
-                            )
-                            .lower()
-                            .strip()
-                        )
-                        if choice in ("y", "yes"):
-                            try:
-                                self.save_session()
-                            except Exception:
-                                continue
-                    except KeyboardInterrupt or EOFError:
-                        console.print("[dim]Summarization canceled.[/dim]\n")
-                        continue
-                    self.summarize_session()
-                    continue
-                else:
-                    console.print(
-                        "[yellow]The conversation history is empty. There is nothing to summarize.[/yellow]\n"
-                    )
-                    continue
-            if user_message.lower() in ["!config"]:  # Config table
-                self.spawn_settings_panel()
-                continue
-            if user_message.lower() in ["!clear"]:  # Clear the viewport
-                console.clear()
-                continue
-            if user_message.lower() in ["!profiles"]:  # List models
-                self.list_models()
-                continue
-            if user_message.lower() in ["!addprofile"]:  # Add a new model
-                self.add_model()
-                continue
-            if user_message.lower() in ["!removeprofile"]:  # Remove a model
-                self.remove_model()
-                continue
-            if user_message.lower() in ["!switch"]:  # Switch models
-                self.switch_model()
-                continue
-            if not user_message.strip():  # Loop back if the user inputs nothing
-                continue
-
-            # User input is appended to the conversation history list if a command was not used
-            self.session.append_message("user", user_message)
-            # New height is set, in case the user resized their terminal window during the prompt
-            self._terminal_height_setter()
-            console.print()
-            # Return true and break if no command was used, stream/rendering then starts
-            return True
 
     def init_rich_live(self):
         """Defines and starts a rich live instance for the main streaming loop."""
@@ -567,7 +1146,7 @@ class Chat:
         )
         self.live.start()
 
-    def _mini_slate_cleaner(self):
+    def reset_turn_state(self):
         """Little helper that resets the turn state."""
         self.full_response_content = ""
         self.full_reasoning_content = ""
@@ -595,46 +1174,8 @@ class Chat:
             self.reasoning_limit = int(self.max_height * 1.5)
             self.response_limit = int(self.max_height * 1.5)
 
-    def _command_completer(self):
-        """Custom word completer containing all main commands."""
-        return WordCompleter(
-            [
-                "!a",
-                "!addprofile",
-                "!attach",
-                "!attachments",
-                "!clear",
-                "!config",
-                "!consume",
-                "!ctx",
-                "!delete",
-                "!h",
-                "!help",
-                "!key",
-                "!l",
-                "!load",
-                "!profiles",
-                "!prompt",
-                "!purge",
-                "!q",
-                "!quit",
-                "!rate",
-                "!removeprofile",
-                "!reset",
-                "!s",
-                "!save",
-                "!sessions",
-                "!sum",
-                "!summary",
-                "!switch",
-                "!theme",
-            ],
-            match_middle=True,
-            WORD=True,
-        )
-
     # <~~STREAMING~~>
-    def stream_response(self):
+    def stream_response(self, callback=None):
         """
         Facilitates the entire streaming process, including:
         - The API interaction
@@ -660,7 +1201,7 @@ class Chat:
             self.buffer_flusher()
         # Allows the user to safely use Ctrl+C to end streaming abruptly
         except KeyboardInterrupt:
-            self._mini_slate_cleaner()  # _mini_slate_cleaner keeps the session clean
+            self.reset_turn_state()
             if self.live:
                 self.live.update(Group(*self.renderables_to_display))
                 self.live.stop()
@@ -668,7 +1209,7 @@ class Chat:
         # Non-quit exception catcher for errors that occur during the API call
         except Exception as e:
             log_exception(e, "Error in stream_response()")
-            self._mini_slate_cleaner()
+            self.reset_turn_state()
             if self.live:
                 self.live.stop()
             spawn_error_panel("API ERROR", f"{e}")
@@ -680,11 +1221,12 @@ class Chat:
             if self.cancel_requested:
                 # If the user canceled the stream, remove their input.
                 self.session.correct_history()
-            if not self.cancel_requested:  # Normal completion
-                # Append the final response to history
-                self.append_history()
-                # Spawn the status panel
-                self.spawn_status_panel()
+            elif not self.cancel_requested:  # Normal completion
+                if callback:
+                    callback(self.full_response_content)
+                else:
+                    self._append_history()
+                    spawn_status_panel(self.session, self.config)
 
     def chunk_parse(self, chunk: ChatCompletionChunk):
         """Parses an incoming chunk into a reasoning string or a response string"""
@@ -773,38 +1315,12 @@ class Chat:
             # Sets last_update_time for frame-synchronization
             self.last_update_time = current_time
 
-    def append_history(self):
-        """Appends full response content to the conversation history"""
+    def _append_history(self):
+        """Uses session.append_message to append model responses to history"""
         if self.full_response_content:
             self.session.append_message("assistant", self.full_response_content)
 
-    # <~~PANELS & CHARTS~~>
-    def spawn_intro_panel(self):
-        """Simple welcome panel, prints on application launch."""
-        # Intro panel content
-        intro_text = Text.assemble(
-            ("Model: ", "bold sandy_brown"),
-            (f"{self.config.model_name}"),
-            ("\nProfile: ", "bold sandy_brown"),
-            (f"{self.config.alias_name}"),
-            ("\nSystem Prompt: ", "bold sandy_brown"),
-            (f"{self.config.system_prompt}", "italic"),
-        )
-
-        # Intro panel constructor
-        intro_panel = Panel(
-            intro_text,
-            title=Text(f"🔮 Local Sage {__version__}", "bold medium_orchid"),
-            title_align="left",
-            border_style="medium_orchid",
-            box=box.HORIZONTALS,
-            padding=(0, 0),
-        )
-
-        console.print(intro_panel)
-        console.print(Markdown("Type `!h` for a list of commands."))
-        console.print()
-
+    # <~~PANELS~~>
     def spawn_reasoning_panel(self):
         """Manages the reasoning panel."""
         if (
@@ -855,122 +1371,6 @@ class Chat:
                     self.live.update(Group(*self.renderables_to_display))
             self.response_panel_initialized = True
 
-    def spawn_status_panel(self):
-        """
-        Defines and prints the status panel.
-
-        Also calculates total_tokens at the end of every context-consuming interaction.
-        """
-        self.total_tokens = self.session.count_tokens()
-        context_percentage = round(
-            (self.total_tokens / self.config.context_length) * 100, 1
-        )
-
-        # Colorize context percentage based on context consumption
-        context_color: str = "dim"
-        if context_percentage >= 50 and context_percentage < 80:
-            context_color = "yellow"
-        elif context_percentage >= 80:
-            context_color = "red"
-            if self.context_flag:
-                console.print(
-                    "[red]WARNING:[/red] Context use has surpassed [red]80%[/red]! You can use [yellow]!sum[/yellow] to generate a summary and start a fresh session.",
-                    "You may want to use [yellow]!save[/yellow] first, if desired.",
-                )
-                self.context_flag = False
-
-        # Turn counter
-        turns = sum(1 for m in self.session.history if m["role"] == "user")
-
-        # Status panel content
-        status_text = Text.assemble(
-            (" ", "cyan"),
-            ("Context: "),
-            (f"{context_percentage}%", f"{context_color}"),
-            (" | "),
-            (f"Turn: {turns}"),
-        )
-
-        # Status panel constructor
-        self.status_panel = Panel(
-            status_text,
-            border_style="dim",
-            style="dim",
-            expand=False,
-        )
-        # Print the panel, no need to render it live
-        console.print(self.status_panel)
-        console.print()
-
-    def spawn_help_panel(self):
-        """Markdown usage chart."""
-        help_markdown = Markdown(
-            textwrap.dedent("""
-            | **Profile Management** | *Manage multiple models & API endpoints* |
-            | --- | ----------- |
-            | `!addprofile` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
-            | `!removeprofile` | Remove an existing profile. |
-            | `!profiles` | List configured profiles. |
-            | `!switch` | Switch between profiles. |
-
-            | **Configuration** | *Main configuration commands* |
-            | --- | ----------- |
-            | `!config` | Display your current configuration settings and default directories. |
-            | `!consume` | Toggle Reasoning panel consumption.  |
-            | `!ctx` | Set maximum context length (for CLI functionality). |
-            | `!key` | Set an API key, if needed. Your API key is stored in your OS keychain. |
-            | `!prompt` | Set a new system prompt. Takes effect on your next session. |
-            | `!rate` | Set the current refresh rate (default is 30). Higher refresh rate = higher CPU usage. |
-            | `!theme` | Change your Markdown theme. Built-in themes can be found at https://pygments.org/styles/ |
-
-            | **Session Management** | *Session management commands* |
-            | --- | ----------- |
-            | `!s` or `!save` | Save the current session. |
-            | `!l` or `!load` | Load a saved session, including a scrollable conversation history. |
-            | `!sum` or `!summary` | Prompt your model for summarization and start a fresh session with the summary. |
-            | `!reset` | Reset for a fresh session. |
-            | `!delete` | Delete a saved session. |
-            | `!sessions` | List all saved sessions. |
-            | `!clear` | Clear the terminal window. |
-            | `!q` or `!quit` | Exit Local Sage. |
-            | | |
-            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the main prompt. Also acts as an immediate exit. |
-            | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
-
-            | **File Management** | *Commands for attaching and managing files* |
-            | --- | ----------- |
-            | `!a` or `!attach` | Attaches a file to the current session. |
-            | `!attachments` | List all current attachments. |
-            | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
-            | | |
-            | **FILE TYPES:** | All text-based file types are acceptable. |
-            | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
-            """)
-        )
-        console.print(help_markdown)
-        console.print()
-
-    def spawn_settings_panel(self):
-        """Markdown settings chart."""
-        settings_markdown = Markdown(
-            textwrap.dedent(f"""
-            | **Current Settings** | *Your current persistent settings* |
-            | --- | ----------- |
-            | **System Prompt**: | *{self.config.system_prompt}* |
-            | | |
-            | **Context Length**: | *{self.config.context_length}* |
-            | | |
-            | **Refresh Rate**: | *{self.config.refresh_rate}* |
-            | | |
-            | **Markdown Theme**: | *{self.config.rich_code_theme}* |
-            - Your configuration file is located at: `{CONFIG_FILE}`
-            - Your session files are located at:     `{SESSIONS_DIR}`
-            - Your error logs are located at:        `{LOG_DIR}`
-            """)
-        )
-        console.print(settings_markdown)
-        console.print()
-
     def spawn_user_panel(self, content: str):
         """Places user input into a readable panel. Used for scrollable history in _resurrect_session()."""
         user_panel = Panel(
@@ -999,550 +1399,82 @@ class Chat:
         )
         console.print(assistant_panel)
 
-    # <~~MAIN CONFIG~~>
-    def set_system_prompt(self):
-        """Sets a new persistent system prompt within the config file."""
-        try:
-            sysprompt = prompt(HTML("Enter a system prompt<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        self.config.system_prompt = sysprompt
-        self.config.save()
-        console.print(f"[green]System prompt updated to:[/green] {sysprompt}")
-        console.print(
-            Text(
-                "[dim]Use [cyan]!reset[/cyan] to start a session with the new prompt. Be sure to [cyan]!save[/cyan] first, if desired.[/dim]"
-            )
-        )
-        console.print()
-
-    def set_context_length(self):
-        """Sets a new persistent context length"""
-        try:
-            ctx = prompt(HTML("Enter a max context length<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        if not ctx.strip():
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
-            return
-
-        try:
-            value = int(ctx)
-            if value <= 0:
-                raise ValueError
-        except ValueError:
-            spawn_error_panel("VALUE ERROR", "Please enter a positive number.")
-            return
-
-        self.config.context_length = value
-        self.config.save()
-        console.print(f"[green]Context length set to:[/green] {value}\n")
-
-    def set_api_key(self):
-        """
-        Allows the user to set an API key.
-
-        SAFELY stores the user's API key with keyring
-        """
-        # API key is referenced in memory during runtime. Never stored in text or code.
-        # See how it is initialized in config.__init__ for further reference
-        try:
-            new_key = prompt(HTML("Enter an API key<seagreen>:</seagreen> ")).strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        if not new_key:
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
-            return
-
-        try:
-            set_password(
-                "LocalSageAPI", USER_NAME, new_key
-            )  # Store securely w/ keyring
-        except (KeyringError, ValueError, RuntimeError, OSError) as e:
-            spawn_error_panel("KEYRING ERROR", f"{e}")
-            return
-
-        self.client = OpenAI(base_url=self.config.endpoint, api_key=new_key)
-        # Reinitialize self.client with the new key
-        console.print("[green]API key updated.[/green]\n")
-
-    def set_refresh_rate(self):
-        """Set a new custom refresh rate"""
-        try:
-            rate = prompt(HTML("Enter a refresh rate<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        if not rate.strip():
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
-            return
-
-        try:
-            value = int(rate)
-            if value <= 3:
-                raise ValueError
-        except ValueError:
-            spawn_error_panel("VALUE ERROR", "Please enter a positive number ≥ 4.")
-            return
-
-        self.config.refresh_rate = value
-        self.config.save()
-        console.print(f"[green]Refresh rate set to:[/green] {value}\n")
-
-    def set_code_theme(self):
-        """Allows the user to change out the rich markdown theme"""
-        try:
-            theme = prompt(HTML("Enter a valid theme name<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]")
-            return
-
-        theme = theme.lower()  # All theme names are lowercase
-        if not theme.strip():
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
-            return
-
-        self.config.rich_code_theme = theme
-        self.config.save()
-        console.print(f"[green]Your theme has been set to: [/green]{theme}\n")
-
-    # <~~MODEL MANAGEMENT~~>
-    def list_models(self):
-        """List all configured models."""
-        console.print("[cyan]Configured profiles:[/cyan]")
-        for m in self.config.models:
-            tag = "(active)" if m["alias"] == self.config.active_model else ""
-            console.print(f"• {m['alias']} → {m['name']} [{m['endpoint']}] {tag}")
-        console.print()
-
-    def add_model(self):
-        """Interactively add a model profile."""
-        try:
-            alias = prompt(HTML("Profile name<seagreen>:</seagreen> ")).strip()
-            name = prompt(HTML("Model name<seagreen>:</seagreen> ")).strip()
-            endpoint = prompt(HTML("API endpoint<seagreen>:</seagreen> ")).strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Profile addition canceled.[/dim]\n")
-            return
-
-        if not alias or not endpoint:
-            console.print(
-                "[red]Profile name and API endpoint are required fields.[/red]\n"
-            )
-            return
-
-        if any(m["alias"] == alias for m in self.config.models):
-            console.print(f"[red]Profile[/red] '{alias}' [red]already exists.[/red]\n")
-            return
-
-        self.config.models.append(
-            {
-                "alias": alias,
-                "name": name or "Unnamed",
-                "endpoint": endpoint,
-                "api_key": "stored",
-            }
-        )
-        self.config.save()
-        console.print(f"[green]Profile[/green] '{alias}' [green]added.[/green]\n")
-
-    def remove_model(self):
-        """Remove a model profile by alias."""
-        self.list_models()
-        try:
-            alias = prompt(HTML("Profile to remove<seagreen>:</seagreen> ")).strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Canceled.[/dim]\n")
-            return
-
-        if alias == self.config.active_model:
-            console.print("[red]The active profile cannot be removed.[/red]\n")
-            return
-
-        before = len(self.config.models)
-        self.config.models = [m for m in self.config.models if m["alias"] != alias]
-        if len(self.config.models) < before:
-            self.config.save()
-            console.print(f"[green]Profile[/green] '{alias}' [green]removed.[/green]\n")
-        else:
-            console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
-
-    def switch_model(self, alias=None):
-        """Switch active model profile by alias."""
-        if not alias:
-            self.list_models()
-            alias = prompt(HTML("Enter a profile name<seagreen>:</seagreen> ")).strip()
-
-        match = next((m for m in self.config.models if m["alias"] == alias), None)
-        if not match:
-            console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
-            return
-
-        self.config.active_model = alias
-        self.config.save()
-        self.client = OpenAI(
-            base_url=match["endpoint"], api_key=get_password("LocalSageAPI", USER_NAME)
-        )
-        console.print(
-            f"[green]Switched to:[/green] {match['name']} "
-            f"[dim]{match['endpoint']}[/dim]\n"
-        )
-
-    # <~~SESSION MANAGEMENT~~>
-    def save_session(self):
-        """Saves a session to a .json file"""
-        if self.session.active_session:
-            file_name = self.session.active_session
-        else:
-            try:
-                file_name = prompt(SESSION_PROMPT)
-            except (KeyboardInterrupt, EOFError):
-                console.print("[dim]Saving canceled[/dim]")
-                return
-
-        if not file_name.strip():
-            console.print("[dim]Saving canceled. No name entered.[/dim]")
-            return
-
-        file_path = self.session._json_helper(file_name)
-        try:
-            self.session.save_to_disk(file_path)
-            console.print(f"[green]Session saved in:[/green] {file_path}")
-        except Exception as e:
-            log_exception(
-                e, f"Error in save_session() - file: {os.path.basename(file_path)}"
-            )
-            spawn_error_panel("ERROR SAVING", f"{e}")
-            return
-
-    def load_session(self):
-        """Loads a session from a .json file"""
-        try:
-            if not self.session.list_sessions():
-                return
-            file_name = prompt(
-                SESSION_PROMPT,
-                completer=self._session_completer(),
-                style=COMPLETER_STYLER,
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Loading canceled.[/dim]\n")
-            return
-
-        if not file_name.strip():
-            console.print("[dim]Saving canceled. No name entered.[/dim]\n")
-            return
-
-        file_path = self.session._json_helper(file_name)
-        try:
-            self.session.load_from_disk(file_path)
-            self.context_flag = True
-            self._resurrect_session()
-            console.print(f"[green]Session loaded from:[/green] {file_path}")
-            self.spawn_status_panel()
-        except FileNotFoundError:
-            console.print(f"[red]No session file found:[/red] {file_path}\n")
-            return
-        except json.JSONDecodeError:
-            console.print(f"[red]Corrupted session file:[/red] {file_path}\n")
-            return
-        except Exception as e:
-            log_exception(
-                e, f"Error in load_session() — file: {os.path.basename(file_path)}"
-            )
-            spawn_error_panel("ERROR LOADING", f"{e}")
-
-    def delete_session(self):
-        """Session deleter. Also lists files for user friendliness."""
-        try:
-            if not self.session.list_sessions():
-                return
-            file_name = prompt(
-                SESSION_PROMPT,
-                completer=self._session_completer(),
-                style=COMPLETER_STYLER,
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Deletion canceled.[/dim]\n")
-            return
-
-        if not file_name.strip():
-            console.print("[dim]Deletion canceled. No name entered.[/dim]\n")
-            return
-
-        file_path = self.session._json_helper(file_name)
-        try:
-            self.session.delete_file(file_path)  # Remove the session file
-            if self.session.active_session == file_name:
-                self.session.active_session = ""
-            console.print(f"[green]Session deleted:[/green] {file_path}\n")
-        except FileNotFoundError:
-            console.print(f"[red]No session file found:[/red] {file_path}\n")
-            return
-        except Exception as e:
-            log_exception(
-                e, f"Error in delete_session() — file: {os.path.basename(file_path)}"
-            )
-            spawn_error_panel("DELETION ERROR", f"{e}")
-
-    def reset_session(self):
-        """Simple session resetter."""
-        # Start a new conversation history list with the system prompt
-        self.session.reset_session()
-        self.context_flag = True
-        console.print("[green]The current session has been reset successfully.[/green]")
-        self.spawn_status_panel()
-
-    def summarize_session(self):
-        """Prompts the model for a summary, resets the session state, and injects the summary."""
-        console.print(
-            "[yellow]Beginning summarization. You can cancel summarization at any time with[/yellow] [cyan]Ctrl + C[/cyan].\n"
-        )
-        # summary_prompt - Used to ask the model for a summary in a digestible way
-        summary_prompt = (
-            "Summarize the full conversation for use in a new session."
-            "Include the main goals, steps taken, and results achieved."
-        )
-        self.session.append_message("user", summary_prompt)
-        self.cancel_requested = False
-        try:
-            # Just the regular streaming loop, patched in for the summarization process. See stream_response()
-            self.init_rich_live()
-            self.completion = self.client.chat.completions.create(
-                model=self.config.model_name,
-                messages=self.session.history,
-                stream=True,
-            )
-            for chunk in self.completion:
-                self.chunk_parse(chunk)
-                self.spawn_reasoning_panel()
-                self.spawn_response_panel()
-                self.update_renderables()
-            time.sleep(0.02)  # Small timeout before buffers are flushed
-            self.buffer_flusher()
-            if self.live:
-                self.live.stop()
-            # Grab the summary from conversation history
-            summary_text = self.full_response_content
-            # Reset the session state entirely, scorched-earth
-            self._mini_slate_cleaner()
-            self.loaded_session_name = ""
-            self.context_flag = True
-            # Start a new session and deliver the summary, starting with the system prompt
-            self.session.reset_with_summary(summary_text)
-            console.print(
-                "[green]Summarization complete! Your new session is primed and ready.[/green]"
-            )
-            # Spawn the status panel, showing proof that the user is now in a new session
-            self.spawn_status_panel()
-        except KeyboardInterrupt:
-            self._mini_slate_cleaner()
-            if self.live:
-                self.live.update(Group(*self.renderables_to_display))
-                self.live.stop()
-            self.cancel_requested = True
-            return
-        # Error catcher
-        except Exception as e:
-            log_exception(e, "Error in summarize_session()")
-            if self.live:
-                self.live.stop()
-            spawn_error_panel("SUMMARIZATION ERROR", f"{e}")
-            self.cancel_requested = True
-            return
-        finally:
-            if self.live:
-                self.live.stop()
-            if self.cancel_requested:
-                self.session.correct_history()
-
-    def _resurrect_session(self):
-        """
-        Utilized by load_session() to print a scrollable history.
-        """
+    def render_history(self):
+        """Renders a scrollable history."""
         for msg in self.session.history:
             role = msg.get("role", "unknown")
-            content = (msg.get("content") or "").strip()  # type: ignore
+            content = (msg.get("content") or "").strip()  # type: ignore , content is guaranteed or null
             if not content:
                 continue  # Skip non-content entries
             if role == "user":
-                # Print a user panel for user messages
                 self.spawn_user_panel(content)
             elif role == "assistant":
-                # Print an assistant panel for assistant messages
                 self.spawn_assistant_panel(content)
 
-    def _session_completer(self):
-        """Session completion helper for prompt_toolkit"""
-        return WordCompleter(
-            [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")],
-            ignore_case=True,
-            sentence=True,
+
+# <~~CONTROLLER~~>
+class App:
+    """Main controller, handles input"""
+
+    def __init__(self):
+        init_logger()
+        # Load config file
+        self.config = Config()
+        try:
+            self.config.load()
+        except FileNotFoundError:
+            self.config.save()
+
+        # Set up all 4 objects
+        self.session_manager = SessionManager(self.config)
+        self.file_manager = FileManager(self.session_manager)
+        self.commands = CommandHandler(
+            self.config, self.session_manager, self.file_manager
         )
+        self.chat = Chat(self.config, self.session_manager, self.file_manager)
 
-    # <~~FILE MANAGEMENT~~>
-    def attach_file(self):
-        """Reads a file from disk and inserts its contents into the current session."""
-        # Setup for prompt_toolkit's validator and path completer features
-        file_completer = PathCompleter(expanduser=True)
-        validator = Validator.from_callable(
-            self._file_validator,
-            error_message="File does not exist.",
-            move_cursor_to_end=True,
-        )
+        # Give CommandHandler access to Chat for !load and !summary
+        self.commands.set_interface(self.chat)
+        # Prompt history
+        self.main_history = InMemoryHistory()
 
-        try:
-            # Prompt the user for a filepath
-            path = prompt(
-                HTML("Enter file path<seagreen>:</seagreen> "),
-                completer=file_completer,
-                validator=validator,
-                validate_while_typing=False,
-                style=COMPLETER_STYLER,
-                history=self.filepath_history,
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]File read canceled.[/dim]\n")
-            return
-
-        # Normalize path input and check file size
-        path = os.path.abspath(os.path.expanduser(path))
-        max_size = 1_000_000  # 1 MB
-        file_size = os.path.getsize(path)
-        if file_size > max_size:
-            console.print(
-                f"[yellow]Warning:[/yellow] File is {file_size / 1_000_000:.2f} MB and may consume a large amount of context."
-            )
-            choice = (
-                prompt(
-                    HTML(
-                        "Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
-                    )
-                )
-                .lower()
-                .strip()
-            )
-            if choice not in ("y", "yes"):
-                console.print("[dim]Attachment canceled by user.[/dim]\n")
-                return
-
-        # File attachment process begins
-        try:
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except UnicodeDecodeError:
-                with open(path, "r", encoding="latin-1") as f:
-                    content = f.read()
-        except Exception as e:  # If the file can't be read, log it bail out.
-            log_exception(e, "Error in attach_file()")
-            spawn_error_panel("ERROR READING FILE", f"{e}")
-            return
-
-        content = content.replace("```", "ʼʼʼ")
-        filename = os.path.basename(path)
-        wrapped = f"---\nFile: `{os.path.basename(path)}`\n```\n{content}\n```\n---"
-        existing = [(i, t, n) for i, t, n in self._get_attachments() if n == filename]
-
-        # If the file exists already in context, delete it.
-        if existing:
-            index = existing[-1][0]
-            self.session.history.pop(index)
-            console.print(f"{filename} [yellow]is being updated in context...[/yellow]")
-        # Add the file's content to context, wrapped in Markdown for retrieval
-        self.session.history.append({"role": "user", "content": wrapped})
-        console.print(f"{filename} [green]read and added to context.[/green]")
-        # Print out the status panel, show updated context consumption
-        self.spawn_status_panel()
-
-    def list_attachments(self):
-        """Return [(index, type, name)] list for files."""
-        attachments = self._get_attachments()
-        if not attachments:
-            console.print("[dim]No attachments found.[/dim]\n")
-            return
-
-        console.print("[cyan]Attachments in context:[/cyan]")
-        for _, kind, name in attachments:
-            console.print(f"• [{kind}] {name}")
-        console.print()
-
-    def purge_attachment(self):
-        """
-        Purges files/images from context and recovers context length.
-        """
-        # Generate the attachment list using _get_attachments()
-        attachments = self._get_attachments()
-        if not attachments:
-            console.print("[dim]No attachments found.[/dim]\n")
-            return
-
-        console.print("[cyan]Attachments in context:[/cyan]")
-        for _, kind, name in attachments:
-            console.print(f"• [{kind}] {name}")
-        console.print()
-        # Prompt for a file to purge
-        try:
-            choice = prompt(
-                HTML("Enter file/image name to remove<seagreen>:</seagreen> ")
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]File purge canceled.[/dim]\n")
-            return
-
-        # Search the attachment list for the designated file by name
-        for idx, kind, name in reversed(attachments):
-            if choice.lower().strip() == name.lower():
-                # Remove the attachment by index from the conversation history list
-                _ = self.session.history.pop(idx)
-                console.print(
-                    f"[green]{kind.capitalize()}[/green] '{name}' [green]removed.[/green]"
-                )
-                # Print the status panel, to show the user their updated context consumption
-                self.spawn_status_panel()
-                return
-        console.print(f"[red]No match found for:[/red] '{choice}'\n")
-
-    def _get_attachments(self) -> list[tuple[int, str, str]]:
-        """Retrieves a list of all attachments by utilizing compiled regex."""
-        attachments: list[tuple[int, str, str]] = []
-        # Iterate through all messages in the conversation history
-        for i, msg in enumerate(self.session.history):
-            content = msg.get("content")
-            # Only process messages where "content" is a string.
-            if isinstance(content, str):
-                # Look for a file attachment pattern using compiled regex.
-                match = FILE_PATTERN.match(content)
-                if match:
-                    # Append each attachment to a new structured list
-                    attachments.append((i, "file", match.group(1)))
-        # Return the complete list of detected attachments.
-        return attachments
-
-    def _file_validator(self, text: str):
-        """File validation helper for prompt_toolkit"""
-        # Boiled down to two lines, simply validates that a file exists
-        text = os.path.abspath(os.path.expanduser(text))
-        return os.path.isfile(text)
-
-    # <~~RUN~~>
     def run(self):
-        """Helper function for running the application"""
-        self.spawn_intro_panel()  # Prints out the intro panel
+        """The app runner"""
+        spawn_intro_panel(self.config)
+
         while True:
-            # Prompts for input, resets temp variables to baseline
-            # Returns False and breaks if the user issues an exit command
-            if not self.slate_cleaner():
+            self.chat.reset_turn_state()
+            try:
+                user_input = prompt(
+                    PROMPT_PREFIX,
+                    completer=COMMAND_COMPLETER,
+                    style=COMPLETER_STYLER,
+                    complete_while_typing=False,
+                    history=self.main_history,
+                )
+            except (KeyboardInterrupt, EOFError):
                 console.print("[yellow]✨ Farewell![/yellow]\n")
                 break
-            self.stream_response()  # Streaming process begins, panels are populated
+
+            if not user_input.strip():
+                continue
+
+            # Handle commands
+            command_result = self.commands.handle_input(user_input)
+            if command_result is not False:
+                if isinstance(command_result, OpenAI):
+                    self.chat.client = command_result
+                continue
+
+            # Feed user message into context
+            self.session_manager.append_message("user", user_input)
+            self.chat._terminal_height_setter()
+            console.print()
+            # Trigger the stream
+            self.chat.stream_response()
+
+        # Save on exit
+        self.config.save()
 
 
 # <~~MAIN FLOW~~>
@@ -1554,17 +1486,9 @@ def main():
             text="[bold medium_orchid]Launching Local Sage...[/bold medium_orchid]",
         )
         with Live(spinner, refresh_per_second=8, console=console):
-            init_logger()  # Initialize the log file
-            config = Config()
-            session_manager = SessionManager(config)
-            try:
-                config.load()  # Loads config variables from file
-            except FileNotFoundError:
-                config.save()  # Generates a config file if one does not exist
-            session = Chat(config, session_manager)
-        console.clear()  # Clears the viewport
-        session.run()  # Runs the application
-        config.save()  # Saves config on exit
+            app = App()
+        console.clear()
+        app.run()
     except (KeyboardInterrupt, EOFError):
         console.print("[yellow]✨ Farewell![/yellow]\n")
     except Exception as e:
