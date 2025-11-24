@@ -274,7 +274,7 @@ class SessionManager:
 
     def reset_with_summary(self, summary_text: str):
         """Wipes the session and starts fresh with a summary."""
-        self.active_filename = ""
+        self.active_session = ""
         self.token_cache = []
         self.history = [
             {"role": "system", "content": self.config.system_prompt},
