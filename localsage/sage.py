@@ -253,7 +253,7 @@ class SessionManager:
             {"role": "system", "content": self.config.system_prompt}
         ]
         self.active_session: str = ""
-        self.encoder = tiktoken.get_encoding("cl100k_base")
+        self.encoder = tiktoken.get_encoding("o200k_base")
         self.token_cache: list[tuple[str, int] | None] = []
 
     def save_to_disk(self, filepath: str):
@@ -1251,11 +1251,18 @@ class Chat:
 
     def chunk_parse(self, chunk: ChatCompletionChunk):
         """Parses an incoming chunk into a reasoning string or a response string"""
-        # Extracts reasoning content from a streamed chat completion chunk
-        self.reasoning = getattr(chunk.choices[0].delta, "reasoning_content", "")
-        # Extracts response content from a streamed chat completion chunk
-        self.response = getattr(chunk.choices[0].delta, "content", "")
-        # Feeds reasoning and response into their respective buffers
+        delta = chunk.choices[0].delta
+        # Extracts text from a streamed chat completion chunk
+        self.reasoning = (
+            getattr(delta, "reasoning_content", None)
+            or getattr(delta, "reasoning", None)
+            or getattr(delta, "thinking", None)
+        )
+        self.response = getattr(delta, "content", None) or getattr(
+            delta, "refusal", None
+        )
+
+        # Feed buffers
         if self.reasoning:
             self.reasoning_buffer.append(self.reasoning)
         if self.response:
