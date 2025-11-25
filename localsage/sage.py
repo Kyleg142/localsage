@@ -1119,9 +1119,10 @@ class Chat:
 
         # API endpoint - Pulls the endpoint from config.json and the api key from keyring
         active = self.config.active()
-        self.client = OpenAI(
-            base_url=active["endpoint"], api_key=get_password("LocalSageAPI", USER_NAME)
-        )
+        api_key = get_password("LocalSageAPI", USER_NAME)
+        if not api_key:
+            api_key = "dummy-key"
+        self.client = OpenAI(base_url=active["endpoint"], api_key=api_key)
         self.model_name = active["name"]
 
         # Initialization for boolean flags
