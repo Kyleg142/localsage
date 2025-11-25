@@ -141,7 +141,6 @@ FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
 COMMAND_COMPLETER = WordCompleter(
     [
         "!a",
-        "!addprofile",
         "!attach",
         "!attachments",
         "!clear",
@@ -154,13 +153,14 @@ COMMAND_COMPLETER = WordCompleter(
         "!key",
         "!l",
         "!load",
+        "!profileadd",
+        "!profileremove",
         "!profiles",
         "!prompt",
         "!purge",
         "!q",
         "!quit",
         "!rate",
-        "!removeprofile",
         "!reset",
         "!s",
         "!save",
@@ -463,8 +463,8 @@ class CLIController:
             "!config": self.spawn_settings_chart,
             "!clear": console.clear,
             "!profiles": self.list_models,
-            "!addprofile": self.add_model,
-            "!removeprofile": self.remove_model,
+            "!profileadd": self.add_model,
+            "!profileremove": self.remove_model,
             "!switch": self.switch_model,
             "!q": sys.exit,
             "!quit": sys.exit,
@@ -510,8 +510,8 @@ class CLIController:
             textwrap.dedent("""
             | **Profile Management** | *Manage multiple models & API endpoints* |
             | --- | ----------- |
-            | `!addprofile` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
-            | `!removeprofile` | Remove an existing profile. |
+            | `!profileadd` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
+            | `!profileremove` | Remove an existing profile. |
             | `!profiles` | List configured profiles. |
             | `!switch` | Switch between profiles. |
 
