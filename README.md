@@ -52,10 +52,11 @@ Type **`localsage`** into your terminal to launch the CLI. Type **`!h`** to view
 
 ### Getting Started ✔️
 Configuration is done entirely through interactive commands. You never have to touch a config file.
-1. Configure a profile with `!addprofile`.
+1. Configure a profile with `!profileadd`.
+  - API endpoint format: `http://ipaddress:port/v1`
+2. Type `!switch` to switch to your new profile.
 2. Use `!ctx` to set your context length.
-3. Use `!prompt` to set your own system prompt.
-4. (Optional) Set an API key with `!key`.
+4. (Optional) Set your own system prompt with `!prompt` or an API key with `!key`.
 
 **Tip:** If you press `tab` while at the main prompt, you can access a command completer for easy command use.
 
@@ -103,9 +104,11 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have to swap your API key with `!key`.
 
 ## Versioning 🔧
-Version **1.0.0** is the fully 'finished' release, containing full CLI functionality.
+The project follows basic versioning:
 - **1.0.x** - Minor patches consisting of bug fixes and aesthetic tweaks.
 - **1.x.0** - Major patches consisting of feature expansions or necessary refactors.
+
+**Current version: 1.1** - Featuring a full architectural refactor, a fix for a pesky keyring exception, and command name adjustments for better UX.
 
 ## License ⚖️
 Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
