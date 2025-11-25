@@ -1,3 +1,8 @@
+### v1.1.3 - Hotfix
+Fixed an API error that can occur when using the !switch command.
+
+---
+
 ### v1.1.2
 **Improvements:**
 - The reasoning panel now activates correctly for a wider range of model providers, including DeepSeek and vLLM.

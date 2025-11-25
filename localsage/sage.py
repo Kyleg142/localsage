@@ -771,9 +771,10 @@ class CLIController:
             f"[green]Switched to:[/green] {match['name']} "
             f"[dim]{match['endpoint']}[/dim]\n"
         )
-        return OpenAI(
-            base_url=match["endpoint"], api_key=get_password("LocalSageAPI", USER_NAME)
-        )
+        api_key = get_password("LocalSageAPI", USER_NAME)
+        if not api_key:
+            api_key = "dummy-key"
+        return OpenAI(base_url=match["endpoint"], api_key=api_key)
 
     # <~~SESSION MANAGEMENT~~>
     def save_session(self):
