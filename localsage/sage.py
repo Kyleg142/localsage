@@ -15,8 +15,10 @@ import time
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
+import keyring
 import tiktoken
 from keyring import get_password, set_password
+from keyring.backends import null
 from keyring.errors import KeyringError
 from openai import OpenAI, Stream
 from openai.types.chat import ChatCompletionMessageParam
@@ -81,6 +83,18 @@ def log_exception(e: Exception, context: str = ""):
     msg = f"{context}\n{tb}" if context else tb
     # Log the message in the current active log file
     logging.error(msg)
+
+
+# Keyring safety net
+def setup_keyring_backend():
+    """Safely detects a keyring backend."""
+    try:
+        keyring.get_keyring()
+    except Exception as e:
+        keyring.set_keyring(null.Keyring())
+        logging.error(
+            f"Keyring backend failed. Falling back to NullBackend. Error: {e}"
+        )
 
 
 # Config file location setter
@@ -1417,7 +1431,6 @@ class App:
     """Main controller, handles input"""
 
     def __init__(self):
-        init_logger()
         # Load config file
         self.config = Config()
         try:
@@ -1479,6 +1492,8 @@ class App:
 # <~~MAIN FLOW~~>
 def main():
     try:
+        init_logger()
+        setup_keyring_backend()
         # Start a spinner, mostly for cold starts
         spinner = Spinner(
             "moon",
