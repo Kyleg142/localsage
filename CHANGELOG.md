@@ -1,3 +1,10 @@
+### v1.1.2
+**Improvements:**
+- The reasoning panel now activates correctly for a wider range of model providers, including DeepSeek and vLLM.
+- Migrated to a different tokenizer for higher efficiency (o200k_base).
+
+---
+
 ###  v1.1.1 - Hotfix
 Fixed an API error that can occur if it receives a null value from keyring.
 
