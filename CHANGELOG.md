@@ -1,4 +1,4 @@
-##v1.1.0
+## v1.1.0
 
 Minor Improvements:
 - Adjusted profile management command naming, all now start with 'profile'.
