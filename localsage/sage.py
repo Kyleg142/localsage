@@ -263,8 +263,17 @@ class SessionManager:
         self.history.append({"role": role, "content": content})  # pyright: ignore
 
     def correct_history(self):
+        """Corrects history if the API conncetion was interrupted"""
         if self.history and self.history[-1]["role"] == "user":
             _ = self.history.pop()
+
+    def remove_history(self, index: int):
+        """Removes a history entry via index"""
+        # No longer assumes that index is valid
+        try:
+            self.history.pop(index)
+        except IndexError:
+            pass
 
     def reset(self):
         """Reset the current session state"""
@@ -338,7 +347,7 @@ class SessionManager:
         return file_path
 
     def _session_completer(self):
-        """Session completion helper for prompt_toolkit"""
+        """Session completion helper for the session manager"""
         return WordCompleter(
             [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")],
             ignore_case=True,
@@ -350,7 +359,6 @@ class FileManager:
     """
     Handles file management.
     - Attachment related I/O
-    - Attachment history manipulation
     """
 
     def __init__(self, session: SessionManager):
@@ -373,7 +381,7 @@ class FileManager:
         # If the file exists already in context, delete it.
         if existing:
             index = existing[-1][0]
-            self.session.history.pop(index)
+            self.session.remove_history(index)
             is_update = True
         # Add the file's content to context, wrapped in Markdown for retrieval
         self.session.append_message("user", wrapped)
@@ -382,9 +390,9 @@ class FileManager:
     def remove_attachment(self, target_name: str) -> str | None:
         """Removes an attachment by name."""
         attachments = self._get_attachments()
-        for idx, kind, name in reversed(attachments):
+        for index, kind, name in reversed(attachments):
             if target_name.lower().strip() == name.lower():
-                self.session.history.pop(idx)  # Remove the attachment by index
+                self.session.remove_history(index)
                 return kind  # For the UI to catch
         return None
 
@@ -408,8 +416,8 @@ class FileManager:
         return os.path.isfile(text)
 
 
-# <~~COMMAND LOGIC~~>
-class CommandHandler:
+# <~~COMMANDS~~>
+class CLIController:
     """Handles and supports all command input"""
 
     def __init__(
@@ -882,7 +890,7 @@ class CommandHandler:
         # Reset session, apply summary
         self.session.reset_with_summary(summary_text)
 
-        # Clean up the turn state
+        # Clean up the turn state in Chat
         if self.interface:
             self.interface.reset_turn_state()
             self.session.active_session = ""
@@ -1074,7 +1082,7 @@ def spawn_error_panel(error: str, exception: str):
 
 # <~~RENDERING~~>
 class Chat:
-    """Handles synchronized rendering. Couples chunk processing with Rich renderables."""
+    """Handles synchronized rendering. Couples API interaction with Rich renderables."""
 
     # <~~INTIALIZATION & GENERIC HELPERS~~>
     def __init__(
@@ -1180,8 +1188,8 @@ class Chat:
         Facilitates the entire streaming process, including:
         - The API interaction
         - The streaming loop ('for chunk in self.completion')
-        - Appending the final response to history
         """
+        self._terminal_height_setter()
         self.cancel_requested = False
 
         try:  # Start rich live display and create the initial connection to the API
@@ -1216,16 +1224,14 @@ class Chat:
             self.cancel_requested = True
         finally:
             if self.live:
-                # Stop the live display since streaming has ended
                 self.live.stop()
             if self.cancel_requested:
-                # If the user canceled the stream, remove their input.
                 self.session.correct_history()
-            elif not self.cancel_requested:  # Normal completion
-                if callback:
+            elif not self.cancel_requested:
+                if callback:  # Callback for summarization
                     callback(self.full_response_content)
-                else:
-                    self._append_history()
+                else:  # Normal completion
+                    self.session.append_message("assistant", self.full_response_content)
                     spawn_status_panel(self.session, self.config)
 
     def chunk_parse(self, chunk: ChatCompletionChunk):
@@ -1285,8 +1291,8 @@ class Chat:
                 self.reasoning_buffer.clear()
                 if self.count_reasoning:  # Simple flag, for disabling text processing
                     reasoning_lines = self.full_reasoning_content.splitlines()
-                    # Stylizes reasoning_text and outputs it to the reasoning panel.
                     if len(reasoning_lines) < self.reasoning_limit:
+                        # Stylizes reasoning_text
                         self.reasoning_panel.renderable = Text(
                             self.full_reasoning_content, style=REASONING_TEXT_STYLE
                         )
@@ -1296,14 +1302,14 @@ class Chat:
                     else:
                         self.count_reasoning = False
             if self.response_buffer:
-                # Response buffer is appended and then cleared
                 self.full_response_content += "".join(self.response_buffer)
                 self.response_buffer.clear()
-                if self.count_response:  # Simple flag, for disabling text processing
+                if self.count_response:
                     response_lines = self.full_response_content.splitlines()
                     if len(response_lines) < self.response_limit:
                         # Math sanitization is performed
                         sanitized = sanitize_math_safe(self.full_response_content)
+                        # Markdown rendering
                         self.response_panel.renderable = Markdown(
                             sanitized,
                             code_theme=self.config.rich_code_theme,
@@ -1312,13 +1318,7 @@ class Chat:
                         self.live.refresh()
                     else:
                         self.count_response = False
-            # Sets last_update_time for frame-synchronization
             self.last_update_time = current_time
-
-    def _append_history(self):
-        """Uses session.append_message to append model responses to history"""
-        if self.full_response_content:
-            self.session.append_message("assistant", self.full_response_content)
 
     # <~~PANELS~~>
     def spawn_reasoning_panel(self):
@@ -1428,7 +1428,7 @@ class App:
         # Set up all 4 objects
         self.session_manager = SessionManager(self.config)
         self.file_manager = FileManager(self.session_manager)
-        self.commands = CommandHandler(
+        self.commands = CLIController(
             self.config, self.session_manager, self.file_manager
         )
         self.chat = Chat(self.config, self.session_manager, self.file_manager)
@@ -1466,11 +1466,10 @@ class App:
                     self.chat.client = command_result
                 continue
 
-            # Feed user message into context
+            # Hand user input over to the session manager
             self.session_manager.append_message("user", user_input)
-            self.chat._terminal_height_setter()
             console.print()
-            # Trigger the stream
+            # Tell Chat that it is go time
             self.chat.stream_response()
 
         # Save on exit
