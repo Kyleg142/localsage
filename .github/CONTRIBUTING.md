@@ -33,8 +33,8 @@ pytest
 ```
 
 The pipeline consists of:
-- **test_sage.py**: CLI smoke tests.
 - **test_sage_math_santizer.py**: Logic verification.
+- Testing coming soon for **sage.py**. The main CLI just went through an architectural refactor.
 
 ## In Summary...
 Run `ruff`, `pyright`, and `pytest`. If all pass, you are golden! Open a PR and it will be reviewed.
