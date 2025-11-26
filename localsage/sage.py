@@ -1247,17 +1247,16 @@ class Chat:
                     spawn_status_panel(self.session, self.config)
 
     def chunk_parse(self, chunk: ChatCompletionChunk):
-        """Parses an incoming chunk into a reasoning string or a response string"""
-        # Extracts text from a streamed chat completion chunk
+        """Parses a chunk and places it into the appropriate buffer"""
         self.state.reasoning = self._extract_reasoning(chunk)
         self.state.response = self._extract_response(chunk)
-        # Feed buffers
         if self.state.reasoning:
             self.state.reasoning_buffer.append(self.state.reasoning)
         if self.state.response:
             self.state.response_buffer.append(self.state.response)
 
     def _extract_reasoning(self, chunk: ChatCompletionChunk):
+        """Extracts reasoning content from a chunk"""
         delta = chunk.choices[0].delta
         reasoning = (
             getattr(delta, "reasoning_content", None)
@@ -1267,6 +1266,7 @@ class Chat:
         return reasoning
 
     def _extract_response(self, chunk: ChatCompletionChunk):
+        """Extracts response content from a chunk"""
         delta = chunk.choices[0].delta
         response = getattr(delta, "content", None) or getattr(delta, "refusal", None)
         return response
@@ -1286,16 +1286,9 @@ class Chat:
 
         # Fully update the live display after the buffers were flushed.
         if self.live:
-            sanitized = sanitize_math_safe(self.state.full_response_content)
-            self.response_panel.renderable = Markdown(
-                sanitized,
-                code_theme=self.config.rich_code_theme,
-                style=RESPONSE_TEXT_STYLE,
-            )
+            self._update_response(self.state.full_response_content)
             if self.reasoning_panel in self.renderables_to_display:
-                self.reasoning_panel.renderable = Text(
-                    self.state.full_reasoning_content, style=REASONING_TEXT_STYLE
-                )
+                self._update_reasoning(self.state.full_reasoning_content)
             self.live.refresh()
 
     def update_renderables(self):
@@ -1321,14 +1314,8 @@ class Chat:
                 if self.count_reasoning:  # Simple flag, for disabling text processing
                     reasoning_lines = self.state.full_reasoning_content.splitlines()
                     if len(reasoning_lines) < self.reasoning_limit:
-                        # Stylizes reasoning_text
-                        self.reasoning_panel.renderable = Text(
-                            self.state.full_reasoning_content,
-                            style=REASONING_TEXT_STYLE,
-                        )
-                        # Refreshes the live display
+                        self._update_reasoning(self.state.full_reasoning_content)
                         self.live.refresh()
-                    # Once the panel grows to the panel limit, disable live text processing
                     else:
                         self.count_reasoning = False
             if self.state.response_buffer:
@@ -1337,18 +1324,27 @@ class Chat:
                 if self.count_response:
                     response_lines = self.state.full_response_content.splitlines()
                     if len(response_lines) < self.response_limit:
-                        # Math sanitization is performed
-                        sanitized = sanitize_math_safe(self.state.full_response_content)
-                        # Markdown rendering
-                        self.response_panel.renderable = Markdown(
-                            sanitized,
-                            code_theme=self.config.rich_code_theme,
-                            style=RESPONSE_TEXT_STYLE,
-                        )
+                        self._update_response(self.state.full_response_content)
                         self.live.refresh()
                     else:
                         self.count_response = False
             self.last_update_time = current_time
+
+    def _update_reasoning(self, content: str):
+        """Updates reasoning panel content"""
+        self.reasoning_panel.renderable = Text(
+            content,
+            style=REASONING_TEXT_STYLE,
+        )
+
+    def _update_response(self, content: str):
+        """Updates response panel content"""
+        sanitized = sanitize_math_safe(content)
+        self.response_panel.renderable = Markdown(
+            sanitized,
+            code_theme=self.config.rich_code_theme,
+            style=RESPONSE_TEXT_STYLE,
+        )
 
     # <~~PANELS~~>
     def spawn_reasoning_panel(self):
