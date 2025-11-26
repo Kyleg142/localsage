@@ -12,6 +12,7 @@ import re
 import sys
 import textwrap
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
@@ -1095,6 +1096,16 @@ def spawn_error_panel(error: str, exception: str):
     console.print()
 
 
+@dataclass
+class TurnState:
+    reasoning: str | None = None
+    response: str | None = None
+    reasoning_buffer: list[str] = field(default_factory=list)
+    response_buffer: list[str] = field(default_factory=list)
+    full_response_content: str = ""
+    full_reasoning_content: str = ""
+
+
 # <~~RENDERING~~>
 class Chat:
     """Handles synchronized rendering. Couples API interaction with Rich renderables."""
@@ -1111,6 +1122,7 @@ class Chat:
         self.config: Config = config
         self.session: SessionManager = session
         self.filemanager: FileManager = filemanager
+        self.state = TurnState()
 
         # Placeholder for live display object
         self.live: Live | None = None
@@ -1140,18 +1152,6 @@ class Chat:
         # Rich renderables (the rendered panel group)
         self.renderables_to_display: list[ConsoleRenderable] = []
 
-        # Strings extracted from a streamed chunk, fed to buffers
-        self.reasoning: str | None = None
-        self.response: str | None = None
-
-        # String buffers
-        self.reasoning_buffer: list[str] = []
-        self.response_buffer: list[str] = []
-
-        # Collectors for output content, appended by the buffers
-        self.full_response_content: str = ""
-        self.full_reasoning_content: str = ""
-
         # Baseline timer for the rendering loop
         self.last_update_time: float = time.monotonic()
 
@@ -1172,9 +1172,7 @@ class Chat:
 
     def reset_turn_state(self):
         """Little helper that resets the turn state."""
-        self.full_response_content = ""
-        self.full_reasoning_content = ""
-        self.full_sanitized_response = ""
+        self.state = TurnState()
         self.reasoning_panel_initialized = False
         self.response_panel_initialized = False
         self.reasoning_panel = Panel("")
@@ -1182,10 +1180,6 @@ class Chat:
         self.count_reasoning = True
         self.count_response = True
         self.renderables_to_display.clear()
-        self.reasoning_buffer.clear()
-        self.response_buffer.clear()
-        self.reasoning = None
-        self.response = None
 
     def _terminal_height_setter(self):
         """
@@ -1245,52 +1239,62 @@ class Chat:
                 self.session.correct_history()
             elif not self.cancel_requested:
                 if callback:  # Callback for summarization
-                    callback(self.full_response_content)
+                    callback(self.state.full_response_content)
                 else:  # Normal completion
-                    self.session.append_message("assistant", self.full_response_content)
+                    self.session.append_message(
+                        "assistant", self.state.full_response_content
+                    )
                     spawn_status_panel(self.session, self.config)
 
     def chunk_parse(self, chunk: ChatCompletionChunk):
         """Parses an incoming chunk into a reasoning string or a response string"""
-        delta = chunk.choices[0].delta
         # Extracts text from a streamed chat completion chunk
-        self.reasoning = (
+        self.state.reasoning = self._extract_reasoning(chunk)
+        self.state.response = self._extract_response(chunk)
+        # Feed buffers
+        if self.state.reasoning:
+            self.state.reasoning_buffer.append(self.state.reasoning)
+        if self.state.response:
+            self.state.response_buffer.append(self.state.response)
+
+    def _extract_reasoning(self, chunk: ChatCompletionChunk):
+        delta = chunk.choices[0].delta
+        reasoning = (
             getattr(delta, "reasoning_content", None)
             or getattr(delta, "reasoning", None)
             or getattr(delta, "thinking", None)
         )
-        self.response = getattr(delta, "content", None) or getattr(
-            delta, "refusal", None
-        )
+        return reasoning
 
-        # Feed buffers
-        if self.reasoning:
-            self.reasoning_buffer.append(self.reasoning)
-        if self.response:
-            self.response_buffer.append(self.response)
+    def _extract_response(self, chunk: ChatCompletionChunk):
+        delta = chunk.choices[0].delta
+        response = getattr(delta, "content", None) or getattr(delta, "refusal", None)
+        return response
 
     def buffer_flusher(self):
         """Stops residual buffer content from 'leaking' into the next turn."""
-        if self.reasoning_buffer:
+        if self.state.reasoning_buffer:
             if self.reasoning_panel in self.renderables_to_display:
-                self.full_reasoning_content += "".join(self.reasoning_buffer)
-            self.reasoning_buffer.clear()
+                self.state.full_reasoning_content += "".join(
+                    self.state.reasoning_buffer
+                )
+            self.state.reasoning_buffer.clear()
 
-        if self.response_buffer:
-            self.full_response_content += "".join(self.response_buffer)
-            self.response_buffer.clear()
+        if self.state.response_buffer:
+            self.state.full_response_content += "".join(self.state.response_buffer)
+            self.state.response_buffer.clear()
 
         # Fully update the live display after the buffers were flushed.
         if self.live:
-            final_text = sanitize_math_safe(self.full_response_content)
+            sanitized = sanitize_math_safe(self.state.full_response_content)
             self.response_panel.renderable = Markdown(
-                final_text,
+                sanitized,
                 code_theme=self.config.rich_code_theme,
                 style=RESPONSE_TEXT_STYLE,
             )
             if self.reasoning_panel in self.renderables_to_display:
                 self.reasoning_panel.renderable = Text(
-                    self.full_reasoning_content, style=REASONING_TEXT_STYLE
+                    self.state.full_reasoning_content, style=REASONING_TEXT_STYLE
                 )
             self.live.refresh()
 
@@ -1308,30 +1312,33 @@ class Chat:
             self.live
             and current_time - self.last_update_time >= 1 / self.config.refresh_rate
         ):
-            if self.reasoning_buffer:
+            if self.state.reasoning_buffer:
                 # Reasoning buffer is appended and then cleared
-                self.full_reasoning_content += "".join(self.reasoning_buffer)
-                self.reasoning_buffer.clear()
+                self.state.full_reasoning_content += "".join(
+                    self.state.reasoning_buffer
+                )
+                self.state.reasoning_buffer.clear()
                 if self.count_reasoning:  # Simple flag, for disabling text processing
-                    reasoning_lines = self.full_reasoning_content.splitlines()
+                    reasoning_lines = self.state.full_reasoning_content.splitlines()
                     if len(reasoning_lines) < self.reasoning_limit:
                         # Stylizes reasoning_text
                         self.reasoning_panel.renderable = Text(
-                            self.full_reasoning_content, style=REASONING_TEXT_STYLE
+                            self.state.full_reasoning_content,
+                            style=REASONING_TEXT_STYLE,
                         )
                         # Refreshes the live display
                         self.live.refresh()
                     # Once the panel grows to the panel limit, disable live text processing
                     else:
                         self.count_reasoning = False
-            if self.response_buffer:
-                self.full_response_content += "".join(self.response_buffer)
-                self.response_buffer.clear()
+            if self.state.response_buffer:
+                self.state.full_response_content += "".join(self.state.response_buffer)
+                self.state.response_buffer.clear()
                 if self.count_response:
-                    response_lines = self.full_response_content.splitlines()
+                    response_lines = self.state.full_response_content.splitlines()
                     if len(response_lines) < self.response_limit:
                         # Math sanitization is performed
-                        sanitized = sanitize_math_safe(self.full_response_content)
+                        sanitized = sanitize_math_safe(self.state.full_response_content)
                         # Markdown rendering
                         self.response_panel.renderable = Markdown(
                             sanitized,
@@ -1347,7 +1354,7 @@ class Chat:
     def spawn_reasoning_panel(self):
         """Manages the reasoning panel."""
         if (
-            self.reasoning is not None
+            self.state.reasoning is not None
             and not self.reasoning_panel_initialized
             and self.live
         ):
@@ -1369,7 +1376,7 @@ class Chat:
     def spawn_response_panel(self):
         """Manages the response panel."""
         if (
-            self.response is not None
+            self.state.response is not None
             and not self.response_panel_initialized
             and self.live
         ):
@@ -1384,14 +1391,12 @@ class Chat:
                 padding=(0, 0),
             )
             # Adds the response panel to the live display, optionally consume the reasoning panel
-            if self.reasoning_panel in self.renderables_to_display:
-                if self.config.reasoning_panel_consume:
-                    self.renderables_to_display.clear()
-                    self.renderables_to_display.insert(0, self.response_panel)
-                else:
-                    self.renderables_to_display.append(self.response_panel)
-            else:
-                self.renderables_to_display.append(self.response_panel)
+            if (
+                self.reasoning_panel in self.renderables_to_display
+                and self.config.reasoning_panel_consume
+            ):
+                self.renderables_to_display.clear()
+            self.renderables_to_display.append(self.response_panel)
             self.live.update(Group(*self.renderables_to_display))
             self.response_panel_initialized = True
 
