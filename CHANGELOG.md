@@ -1,3 +1,10 @@
+### v1.1.5
+**Technical Improvements:**
+- **Architecture:** Turn state has been decoupled and placed into it's own dataclass called TurnState. The rendering engine is now entirely state-based.
+- Cleaned up code throughout the Chat class.
+
+---
+
 ### v1.1.4 - Hotfix
 Fixed an issue with instruct models not triggering the Response panel after the 1.1.2 update.
 
@@ -9,7 +16,7 @@ Fixed an API error that can occur when using the !switch command.
 ---
 
 ### v1.1.2
-**Improvements:**
+**Technical Improvements:**
 - The Reasoning panel now activates correctly for a wider range of model providers, including DeepSeek and vLLM.
 - Migrated to a different tokenizer for higher efficiency (o200k_base).
 
