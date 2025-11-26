@@ -1388,10 +1388,11 @@ class Chat:
                 if self.config.reasoning_panel_consume:
                     self.renderables_to_display.clear()
                     self.renderables_to_display.insert(0, self.response_panel)
-                    self.live.update(Group(*self.renderables_to_display))
                 else:
                     self.renderables_to_display.append(self.response_panel)
-                    self.live.update(Group(*self.renderables_to_display))
+            else:
+                self.renderables_to_display.append(self.response_panel)
+            self.live.update(Group(*self.renderables_to_display))
             self.response_panel_initialized = True
 
     def spawn_user_panel(self, content: str):
