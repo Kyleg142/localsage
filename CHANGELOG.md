@@ -1,7 +1,8 @@
 ### v1.1.5
 **Technical Improvements:**
 - **Architecture:** Turn state has been decoupled and placed into it's own dataclass called TurnState. The rendering engine is now entirely state-based.
-- Cleaned up code throughout the Chat class.
+- Cleaned up the 1.1.4 hotfix to protect against future regression.
+- General code clean-up throughout the Chat class.
 
 ---
 
