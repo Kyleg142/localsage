@@ -827,7 +827,6 @@ class CLIController:
             self.session.load_from_disk(file_path)
             # Create scrollable history
             if self.interface:
-                console.clear()
                 self.interface.reset_turn_state()
                 self.interface.render_history()
             console.print(f"[green]Session loaded from:[/green] {file_path}")
