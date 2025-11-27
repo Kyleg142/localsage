@@ -109,8 +109,6 @@ The project follows basic versioning:
 - **1.0.x** - Minor patches consisting of bug fixes and aesthetic tweaks.
 - **1.x.0** - Major patches consisting of feature expansions or necessary refactors.
 
-**Current version: 1.1** - Featuring a full architectural refactor, a fix for a pesky keyring exception, and command name adjustments for better UX.
-
 ## License ⚖️
 Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
 
