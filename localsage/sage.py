@@ -45,14 +45,17 @@ from rich.text import Text
 from localsage import __version__
 from localsage.sage_math_sanitizer import sanitize_math_safe
 
-# Sets and creates directories for the config file, session management, and logging
 APP_DIR = user_data_dir("LocalSage")
 CONFIG_DIR = os.path.join(APP_DIR, "config")
 SESSIONS_DIR = os.path.join(APP_DIR, "sessions")
 LOG_DIR = os.path.join(APP_DIR, "logs")
+
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
+
+CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
+USER_NAME = getpass.getuser()
 
 
 # Logger setup
@@ -82,7 +85,6 @@ def log_exception(e: Exception, context: str = ""):
     tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
     # Add optional context provided by error catchers ('except Exception as e:' blocks)
     msg = f"{context}\n{tb}" if context else tb
-    # Log the message in the current active log file
     logging.error(msg)
 
 
@@ -98,30 +100,27 @@ def setup_keyring_backend():
         )
 
 
-# Config file location setter
-CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
+def retrieve_key() -> str:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        api_key = get_password("LocalSageAPI", USER_NAME)
+    if not api_key:
+        api_key = "dummy-key"
+    return api_key
 
-# Current user name
-USER_NAME = getpass.getuser()
 
-# Reasoning panel configuration
-REASONING_PANEL_TITLE = Text("🧠 Reasoning", style="bold yellow")
-REASONING_TITLE_ALIGN = "left"
-REASONING_BORDER_STYLE = "yellow"
-REASONING_TEXT_STYLE = "#b0b0b0 italic"  # grey66 looks great but is opinionated
-REASONING_PANEL_WIDTH = None
+# Spinner
+def spinner_constructor(content: str) -> Spinner:
+    # Needs to be a function, so it can be used in main() and Chat.stream_response
+    return Spinner(
+        "moon",
+        text=f"[bold medium_orchid]{content}[/bold medium_orchid]",
+    )
 
-# Response panel configuration
-RESPONSE_PANEL_TITLE = Text("💬 Response", style="bold green")
-RESPONSE_TITLE_ALIGN = "left"
-RESPONSE_BORDER_STYLE = "green"
-RESPONSE_TEXT_STYLE = "default"
-RESPONSE_PANEL_WIDTH = None
 
-# Prompt configuration
+# <~~GLOBAL STYLING~~>
+# Main prompt prefix
 PROMPT_PREFIX = HTML("<seagreen>󰅂 </seagreen>")
-SESSION_PROMPT = HTML("Enter a session name<seagreen>:</seagreen> ")
-
 # Dark style for all prompt_toolkit completers
 COMPLETER_STYLER = Style.from_dict(
     {
@@ -133,12 +132,7 @@ COMPLETER_STYLER = Style.from_dict(
         "completion-menu.meta.completion.current": "bg:#024a1a #000000",
     }
 )
-
-# Compiled regex used in the file management system
-# Alternative, allows whitespace: ^---\s*File:\s*(.+?)
-FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
-
-# Custom completer
+# Main prompt command completer
 COMMAND_COMPLETER = WordCompleter(
     [
         "!a",
@@ -165,7 +159,6 @@ COMMAND_COMPLETER = WordCompleter(
         "!reset",
         "!s",
         "!save",
-        "!sessions",
         "!sum",
         "!summary",
         "!switch",
@@ -175,7 +168,12 @@ COMMAND_COMPLETER = WordCompleter(
     WORD=True,
 )
 
-# Terminal intergration
+# <~~REGGIE~~>
+# Compiled regex used in the file management system
+# Alternative, allows whitespace: ^---\s*File:\s*(.+?)
+FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
+
+# <~~INTEGRATION~~>
 console = Console()
 
 
@@ -361,7 +359,7 @@ class SessionManager:
         file_path = os.path.join(SESSIONS_DIR, file_name)
         return file_path
 
-    def _session_completer(self):
+    def _session_completer(self) -> WordCompleter:
         """Session completion helper for the session manager"""
         return WordCompleter(
             [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")],
@@ -431,16 +429,152 @@ class FileManager:
         return os.path.isfile(text)
 
 
+# <~~USER INTERFACE~~~>
+class UIConstructor:
+    def __init__(self, config: Config):
+        self.config = config
+
+    def reasoning_panel_constructor(self) -> Panel:
+        return Panel(
+            "",
+            title=Text("🧠 Reasoning", style="bold yellow"),
+            title_align="left",
+            border_style="yellow",
+            style="#b0b0b0 italic",
+            width=None,
+            box=box.HORIZONTALS,
+            padding=(0, 0),
+        )
+
+    def response_panel_constructor(self) -> Panel:
+        return Panel(
+            "",
+            title=Text("💬 Response", style="bold green"),
+            title_align="left",
+            border_style="green",
+            style="default",
+            width=None,
+            box=box.HORIZONTALS,
+            padding=(0, 0),
+        )
+
+    def user_panel_constructor(self, content: str) -> Panel:
+        return Panel(
+            content,
+            box=box.HORIZONTALS,
+            padding=(0, 0),
+            title=Text("🌐 You", style="bold blue"),
+            title_align="left",
+            border_style="blue",
+            style="default",
+        )
+
+    def status_panel_constructor(self, status_text: Text) -> Panel:
+        return Panel(
+            status_text,
+            border_style="dim",
+            style="dim",
+            expand=False,
+        )
+
+    def intro_panel_constructor(self, intro_text: Text) -> Panel:
+        return Panel(
+            intro_text,
+            title=Text(f"🔮 Local Sage {__version__}", "bold medium_orchid"),
+            title_align="left",
+            border_style="medium_orchid",
+            box=box.HORIZONTALS,
+            padding=(0, 0),
+        )
+
+    def error_panel_constructor(self, error: str, exception: str) -> Panel:
+        return Panel(
+            exception,
+            title=Text(f"❌ {error}", style="bold red"),
+            title_align="left",
+            border_style="red",
+            expand=False,
+        )
+
+
+class GlobalPanels:
+    def __init__(self, session: SessionManager, config: Config, ui: UIConstructor):
+        self.session: SessionManager = session
+        self.config: Config = config
+        self.ui: UIConstructor = ui
+
+    def spawn_intro_panel(self):
+        """Simple welcome panel, prints on application launch."""
+        # Intro panel content
+        intro_text = Text.assemble(
+            ("Model: ", "bold sandy_brown"),
+            (f"{self.config.model_name}"),
+            ("\nProfile: ", "bold sandy_brown"),
+            (f"{self.config.alias_name}"),
+            ("\nSystem Prompt: ", "bold sandy_brown"),
+            (f"{self.config.system_prompt}", "italic"),
+        )
+
+        # Intro panel constructor
+        intro_panel = self.ui.intro_panel_constructor(intro_text)
+
+        console.print(intro_panel)
+        console.print(Markdown("Type `!h` for a list of commands."))
+        console.print()
+
+    def spawn_status_panel(self):
+        """
+        Constructs and prints a status panel.
+        """
+        total_tokens = self.session.count_tokens()
+        context_percentage = round((total_tokens / self.config.context_length) * 100, 1)
+
+        # Colorize context percentage based on context consumption
+        context_color: str = "dim"
+        if context_percentage >= 50 and context_percentage < 80:
+            context_color = "yellow"
+        elif context_percentage >= 80:
+            context_color = "red"
+
+        # Turn counter
+        turns = sum(1 for m in self.session.history if m["role"] == "user")
+
+        # Status panel content
+        status_text = Text.assemble(
+            (" ", "cyan"),
+            ("Context: "),
+            (f"{context_percentage}%", f"{context_color}"),
+            (" | "),
+            (f"Turn: {turns}"),
+        )
+
+        # Status panel constructor
+        status_panel = self.ui.status_panel_constructor(status_text)
+        console.print(status_panel)
+        console.print()
+
+    def spawn_error_panel(self, error: str, exception: str):
+        """Error panel template for Local Sage, used in Chat() and main()"""
+        error_panel = self.ui.error_panel_constructor(error, exception)
+        console.print(error_panel)
+        console.print()
+
+
 # <~~COMMANDS~~>
 class CLIController:
     """Handles and supports all command input"""
 
     def __init__(
-        self, config: Config, session: SessionManager, filemanager: FileManager
+        self,
+        config: Config,
+        session: SessionManager,
+        filemanager: FileManager,
+        panel: GlobalPanels,
     ):
         self.config: Config = config
         self.session: SessionManager = session
         self.filemanager: FileManager = filemanager
+        self.panel: GlobalPanels = panel
         self.filepath_history = InMemoryHistory()
         self.interface = None
 
@@ -456,7 +590,6 @@ class CLIController:
             "!attach": self.attach_file,
             "!purge": self.purge_attachment,
             "!consume": self.toggle_consume,
-            "!sessions": self.list_sessions,
             "!delete": self.delete_session,
             "!reset": self.reset_session,
             "!sum": self.summarize_session,
@@ -475,6 +608,8 @@ class CLIController:
             "!key": self.set_api_key,
             "!prompt": self.set_system_prompt,
         }
+
+        self.session_prompt = HTML("Enter a session name<seagreen>:</seagreen> ")
 
     def handle_input(self, user_input: str) -> bool | None | OpenAI:
         """Parse user input for a command & handle it"""
@@ -533,7 +668,6 @@ class CLIController:
             | `!sum` or `!summary` | Prompt your model for summarization and start a fresh session with the summary. |
             | `!reset` | Reset for a fresh session. |
             | `!delete` | Delete a saved session. |
-            | `!sessions` | List all saved sessions. |
             | `!clear` | Clear the terminal window. |
             | `!q` or `!quit` | Exit Local Sage. |
             | | |
@@ -559,6 +693,10 @@ class CLIController:
             textwrap.dedent(f"""
             | **Current Settings** | *Your current persistent settings* |
             | --- | ----------- |
+            | **Profile**: | *{self.config.alias_name}* |
+            | | |
+            | **Model Name**: | *{self.config.model_name}* |
+            | | |
             | **System Prompt**: | *{self.config.system_prompt}* |
             | | |
             | **Context Length**: | *{self.config.context_length}* |
@@ -608,39 +746,40 @@ class CLIController:
             if value <= 0:
                 raise ValueError
         except ValueError:
-            spawn_error_panel("VALUE ERROR", "Please enter a positive number.")
+            self.panel.spawn_error_panel(
+                "VALUE ERROR", "Please enter a positive number."
+            )
             return
 
         self.config.context_length = value
         self.config.save()
         console.print(f"[green]Context length set to:[/green] {value}\n")
 
-    def set_api_key(self):
+    def set_api_key(self) -> OpenAI | None:
         """
         Allows the user to set an API key.
 
         SAFELY stores the user's API key with keyring
         """
-        # API key is referenced in memory during runtime. Never stored in text or code.
-        # See how it is initialized in config.__init__ for further reference
         try:
             new_key = prompt(HTML("Enter an API key<seagreen>:</seagreen> ")).strip()
         except (KeyboardInterrupt, EOFError):
             console.print("[dim]Edit canceled.[/dim]\n")
-            return None
+            return
 
         if not new_key:
             console.print("[dim]Edit canceled. No input provided.[/dim]\n")
-            return None
+            return
 
         try:
-            set_password(
-                "LocalSageAPI", USER_NAME, new_key
-            )  # Store securely w/ keyring
+            # Try to store securely w/ keyring
+            set_password("LocalSageAPI", USER_NAME, new_key)
+            console.print("[green]API key updated.[/green]\n")
         except (KeyringError, ValueError, RuntimeError, OSError) as e:
-            spawn_error_panel("KEYRING ERROR", f"{e}")
-            return None
-        console.print("[green]API key updated.[/green]\n")
+            self.panel.spawn_error_panel(
+                "KEYRING ERROR",
+                f"Could not save to your OS keychain: {e}\nUsing key for this session only.",
+            )
         return OpenAI(base_url=self.config.endpoint, api_key=new_key)
 
     def set_refresh_rate(self):
@@ -660,7 +799,9 @@ class CLIController:
             if value <= 3:
                 raise ValueError
         except ValueError:
-            spawn_error_panel("VALUE ERROR", "Please enter a positive number ≥ 4.")
+            self.panel.spawn_error_panel(
+                "VALUE ERROR", "Please enter a positive number ≥ 4."
+            )
             return
 
         self.config.refresh_rate = value
@@ -674,12 +815,10 @@ class CLIController:
         except (KeyboardInterrupt, EOFError):
             console.print("[dim]Edit canceled.[/dim]")
             return
-
-        theme = theme.lower()  # All theme names are lowercase
         if not theme.strip():
             console.print("[dim]Edit canceled. No input provided.[/dim]\n")
             return
-
+        theme = theme.lower()  # All theme names are lowercase
         self.config.rich_code_theme = theme
         self.config.save()
         console.print(f"[green]Your theme has been set to: [/green]{theme}\n")
@@ -742,6 +881,9 @@ class CLIController:
         except (KeyboardInterrupt, EOFError):
             console.print("[dim]Canceled.[/dim]\n")
             return
+        if not alias.strip():
+            console.print("[dim]No input detected.[/dim]\n")
+            return
 
         if alias == self.config.active_model:
             console.print("[red]The active profile cannot be removed.[/red]\n")
@@ -755,11 +897,20 @@ class CLIController:
         else:
             console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
 
-    def switch_model(self, alias=None) -> OpenAI | None:
+    def switch_model(self, alias=None) -> tuple[OpenAI, str] | None:
         """Switch active model profile by alias."""
         if not alias:
             self.list_models()
-            alias = prompt(HTML("Enter a profile name<seagreen>:</seagreen> ")).strip()
+            try:
+                alias = prompt(
+                    HTML("Enter a profile name<seagreen>:</seagreen> ")
+                ).strip()
+            except (KeyboardInterrupt, EOFError):
+                console.print("[dim]Canceled.[/dim]\n")
+                return
+            if not alias.strip():
+                console.print("[dim]No input detected.[/dim]\n")
+                return
 
         match = next((m for m in self.config.models if m["alias"] == alias), None)
         if not match:
@@ -772,10 +923,10 @@ class CLIController:
             f"[green]Switched to:[/green] {match['name']} "
             f"[dim]{match['endpoint']}[/dim]\n"
         )
-        api_key = get_password("LocalSageAPI", USER_NAME)
-        if not api_key:
-            api_key = "dummy-key"
-        return OpenAI(base_url=match["endpoint"], api_key=api_key)
+        return (
+            OpenAI(base_url=match["endpoint"], api_key=retrieve_key()),
+            match["name"],
+        )
 
     # <~~SESSION MANAGEMENT~~>
     def save_session(self):
@@ -784,7 +935,7 @@ class CLIController:
             file_name = self.session.active_session
         else:
             try:
-                file_name = prompt(SESSION_PROMPT)
+                file_name = prompt(self.session_prompt)
             except (KeyboardInterrupt, EOFError):
                 console.print("[dim]Saving canceled[/dim]\n")
                 return
@@ -801,16 +952,16 @@ class CLIController:
             log_exception(
                 e, f"Error in save_session() - file: {os.path.basename(file_path)}"
             )
-            spawn_error_panel("ERROR SAVING", f"{e}")
+            self.panel.spawn_error_panel("ERROR SAVING", f"{e}")
             return
 
     def load_session(self):
         """Loads a session from a .json file"""
         try:
-            if not self.list_sessions():
+            if not self._list_sessions():
                 return
             file_name = prompt(
-                SESSION_PROMPT,
+                self.session_prompt,
                 completer=self.session._session_completer(),
                 style=COMPLETER_STYLER,
             )
@@ -830,7 +981,7 @@ class CLIController:
                 self.interface.reset_turn_state()
                 self.interface.render_history()
             console.print(f"[green]Session loaded from:[/green] {file_path}")
-            spawn_status_panel(self.session, self.config)
+            self.panel.spawn_status_panel()
         except FileNotFoundError:
             console.print(f"[red]No session file found:[/red] {file_path}\n")
             return
@@ -841,15 +992,15 @@ class CLIController:
             log_exception(
                 e, f"Error in load_session() — file: {os.path.basename(file_path)}"
             )
-            spawn_error_panel("ERROR LOADING", f"{e}")
+            self.panel.spawn_error_panel("ERROR LOADING", f"{e}")
 
     def delete_session(self):
         """Session deleter. Also lists files for user friendliness."""
         try:
-            if not self.list_sessions():
+            if not self._list_sessions():
                 return
             file_name = prompt(
-                SESSION_PROMPT,
+                self.session_prompt,
                 completer=self.session._session_completer(),
                 style=COMPLETER_STYLER,
             )
@@ -874,14 +1025,14 @@ class CLIController:
             log_exception(
                 e, f"Error in delete_session() — file: {os.path.basename(file_path)}"
             )
-            spawn_error_panel("DELETION ERROR", f"{e}")
+            self.panel.spawn_error_panel("DELETION ERROR", f"{e}")
 
     def reset_session(self):
         """Simple session resetter."""
         # Start a new conversation history list with the system prompt
         self.session.reset()
         console.print("[green]The current session has been reset successfully.[/green]")
-        spawn_status_panel(self.session, self.config)
+        self.panel.spawn_status_panel()
 
     def summarize_session(self):
         """Sets up and triggers summarization"""
@@ -911,9 +1062,9 @@ class CLIController:
             self.session.active_session = ""
 
         console.print("[green]Summarization complete! New session primed.[/green]")
-        spawn_status_panel(self.session, self.config)
+        self.panel.spawn_status_panel()
 
-    def list_sessions(self) -> bool:
+    def _list_sessions(self) -> bool:
         """Fetches the session list and displays it."""
         sessions = self.session.find_sessions()
 
@@ -951,6 +1102,9 @@ class CLIController:
         except (KeyboardInterrupt, EOFError):
             console.print("[dim]File read canceled.[/dim]\n")
             return
+        if not path.strip():
+            console.print("[dim]No input detected.[/dim]\n")
+            return
 
         # Normalize path input and check file size
         path = os.path.abspath(os.path.expanduser(path))
@@ -979,10 +1133,10 @@ class CLIController:
                 console.print(f"{filename} [green]has been updated in context.[/green]")
             else:
                 console.print(f"{filename} [green]read and added to context.[/green]")
-            spawn_status_panel(self.session, self.config)
+            self.panel.spawn_status_panel()
         except Exception as e:
             log_exception(e, "Error in process_file()")
-            spawn_error_panel("ERROR READING FILE", f"{e}")
+            self.panel.spawn_error_panel("ERROR READING FILE", f"{e}")
             return
 
     def purge_attachment(self):
@@ -1005,6 +1159,9 @@ class CLIController:
         except (KeyboardInterrupt, EOFError):
             console.print("[dim]File purge canceled.[/dim]\n")
             return
+        if not choice.strip():
+            console.print("[dim]No input detected.[/dim]\n")
+            return
 
         # And purge the file from the session
         removed_file = self.filemanager.remove_attachment(choice)
@@ -1012,87 +1169,9 @@ class CLIController:
             console.print(
                 f"[green]{removed_file.capitalize()}[/green] '{choice}' [green]removed.[/green]"
             )
-            spawn_status_panel(self.session, self.config)
+            self.panel.spawn_status_panel()
         else:
             console.print(f"[red]No match found for:[/red] '{choice}'\n")
-
-
-# <~~UNIVERSAL PANELS~~>
-def spawn_intro_panel(config: Config):
-    """Simple welcome panel, prints on application launch."""
-    # Intro panel content
-    intro_text = Text.assemble(
-        ("Model: ", "bold sandy_brown"),
-        (f"{config.model_name}"),
-        ("\nProfile: ", "bold sandy_brown"),
-        (f"{config.alias_name}"),
-        ("\nSystem Prompt: ", "bold sandy_brown"),
-        (f"{config.system_prompt}", "italic"),
-    )
-
-    # Intro panel constructor
-    intro_panel = Panel(
-        intro_text,
-        title=Text(f"🔮 Local Sage {__version__}", "bold medium_orchid"),
-        title_align="left",
-        border_style="medium_orchid",
-        box=box.HORIZONTALS,
-        padding=(0, 0),
-    )
-
-    console.print(intro_panel)
-    console.print(Markdown("Type `!h` for a list of commands."))
-    console.print()
-
-
-def spawn_status_panel(session: SessionManager, config: Config):
-    """
-    Constructs and prints a status panel.
-    """
-    total_tokens = session.count_tokens()
-    context_percentage = round((total_tokens / config.context_length) * 100, 1)
-
-    # Colorize context percentage based on context consumption
-    context_color: str = "dim"
-    if context_percentage >= 50 and context_percentage < 80:
-        context_color = "yellow"
-    elif context_percentage >= 80:
-        context_color = "red"
-
-    # Turn counter
-    turns = sum(1 for m in session.history if m["role"] == "user")
-
-    # Status panel content
-    status_text = Text.assemble(
-        (" ", "cyan"),
-        ("Context: "),
-        (f"{context_percentage}%", f"{context_color}"),
-        (" | "),
-        (f"Turn: {turns}"),
-    )
-
-    # Status panel constructor
-    status_panel = Panel(
-        status_text,
-        border_style="dim",
-        style="dim",
-        expand=False,
-    )
-    console.print(status_panel)
-    console.print()
-
-
-def spawn_error_panel(error: str, exception: str):
-    """Error panel template for Local Sage, used in Chat() and main()"""
-    error_panel = Panel(
-        exception,
-        title=Text(f"❌ {error}", style="bold red"),
-        title_align="left",
-        border_style="red",
-        expand=False,
-    )
-    console.print(error_panel)
-    console.print()
 
 
 @dataclass
@@ -1115,12 +1194,16 @@ class Chat:
         config: Config,
         session: SessionManager,
         filemanager: FileManager,
+        ui: UIConstructor,
+        panel: GlobalPanels,
     ):
         """Initializes all variables for Chat"""
 
         self.config: Config = config
         self.session: SessionManager = session
         self.filemanager: FileManager = filemanager
+        self.panel: GlobalPanels = panel
+        self.ui: UIConstructor = ui
         self.state = TurnState()
 
         # Placeholder for live display object
@@ -1131,10 +1214,7 @@ class Chat:
 
         # API endpoint - Pulls the endpoint from config.json and the api key from keyring
         active = self.config.active()
-        api_key = get_password("LocalSageAPI", USER_NAME)
-        if not api_key:
-            api_key = "dummy-key"
-        self.client = OpenAI(base_url=active["endpoint"], api_key=api_key)
+        self.client = OpenAI(base_url=active["endpoint"], api_key=retrieve_key())
         self.model_name = active["name"]
 
         # Initialization for boolean flags
@@ -1193,23 +1273,22 @@ class Chat:
 
     # <~~STREAMING~~>
     def stream_response(self, callback=None):
-        """
-        Facilitates the entire streaming process, including:
-        - The API interaction
-        - The streaming loop ('for chunk in self.completion')
-        """
+        """Facilitates the entire streaming process."""
         self._terminal_height_setter()
         self.cancel_requested = False
-
         try:  # Start rich live display and create the initial connection to the API
             self.init_rich_live()
-            self.completion = self.client.chat.completions.create(
-                model=self.config.model_name,
-                messages=self.session.history,
-                stream=True,
+            self.renderables_to_display.append(
+                spinner_constructor("Awaiting response...")
             )
+            self._rebuild_layout(force_refresh=True)
+            self.completion = self._fetch_stream()
             # Parse incoming chunks, process them based on type, update panels
+            campbells_chunky = True
             for chunk in self.completion:
+                if campbells_chunky:
+                    self.renderables_to_display.clear()
+                    campbells_chunky = False
                 self.chunk_parse(chunk)
                 self.spawn_reasoning_panel()
                 self.spawn_response_panel()
@@ -1219,9 +1298,7 @@ class Chat:
         # Allows the user to safely use Ctrl+C to end streaming abruptly
         except KeyboardInterrupt:
             self.reset_turn_state()
-            if self.live:
-                self.live.update(Group(*self.renderables_to_display))
-                self.live.stop()
+            self._rebuild_layout()
             self.cancel_requested = True
         # Non-quit exception catcher for errors that occur during the API call
         except Exception as e:
@@ -1229,7 +1306,7 @@ class Chat:
             self.reset_turn_state()
             if self.live:
                 self.live.stop()
-            spawn_error_panel("API ERROR", f"{e}")
+            self.panel.spawn_error_panel("API ERROR", f"{e}")
             self.cancel_requested = True
         finally:
             if self.live:
@@ -1243,7 +1320,15 @@ class Chat:
                     self.session.append_message(
                         "assistant", self.state.full_response_content
                     )
-                    spawn_status_panel(self.session, self.config)
+                    self.panel.spawn_status_panel()
+
+    def _fetch_stream(self) -> Stream[ChatCompletionChunk]:
+        """Isolated API call."""
+        return self.client.chat.completions.create(
+            model=self.config.model_name,
+            messages=self.session.history,
+            stream=True,
+        )
 
     def chunk_parse(self, chunk: ChatCompletionChunk):
         """Parses a chunk and places it into the appropriate buffer"""
@@ -1254,7 +1339,7 @@ class Chat:
         if self.state.response:
             self.state.response_buffer.append(self.state.response)
 
-    def _extract_reasoning(self, chunk: ChatCompletionChunk):
+    def _extract_reasoning(self, chunk: ChatCompletionChunk) -> str | None:
         """Extracts reasoning content from a chunk"""
         delta = chunk.choices[0].delta
         reasoning = (
@@ -1264,7 +1349,7 @@ class Chat:
         )
         return reasoning
 
-    def _extract_response(self, chunk: ChatCompletionChunk):
+    def _extract_response(self, chunk: ChatCompletionChunk) -> str | None:
         """Extracts response content from a chunk"""
         delta = chunk.choices[0].delta
         response = getattr(delta, "content", None) or getattr(delta, "refusal", None)
@@ -1283,29 +1368,18 @@ class Chat:
             self.state.full_response_content += "".join(self.state.response_buffer)
             self.state.response_buffer.clear()
 
-        # Fully update the live display after the buffers were flushed.
-        if self.live:
-            self._update_response(self.state.full_response_content)
-            if self.reasoning_panel in self.renderables_to_display:
-                self._update_reasoning(self.state.full_reasoning_content)
-            self.live.refresh()
+        # Update the live display
+        if self.reasoning_panel in self.renderables_to_display:
+            self._update_reasoning(self.state.full_reasoning_content)
+        self._update_response(self.state.full_response_content)
 
     def update_renderables(self):
-        """
-        Updates rendered panel(s). Where the heavy lifting happens.
-        - Renders at a hard-coded refresh rate that is in sync with the rich.live instance.
-        - 'Two-cylinder engine', concatenates content from two separate buffers.
-        - Performs math sanitization, markdown rendering, and stylized text rendering.
-        """
+        """Updates rendered panels at a synchronized rate."""
         # Sets up the internal timer for frame-limiting
         current_time = time.monotonic()
         # Syncs text rendering with the live display's refresh rate.
-        if (
-            self.live
-            and current_time - self.last_update_time >= 1 / self.config.refresh_rate
-        ):
+        if current_time - self.last_update_time >= 1 / self.config.refresh_rate:
             if self.state.reasoning_buffer:
-                # Reasoning buffer is appended and then cleared
                 self.state.full_reasoning_content += "".join(
                     self.state.reasoning_buffer
                 )
@@ -1314,7 +1388,6 @@ class Chat:
                     reasoning_lines = self.state.full_reasoning_content.splitlines()
                     if len(reasoning_lines) < self.reasoning_limit:
                         self._update_reasoning(self.state.full_reasoning_content)
-                        self.live.refresh()
                     else:
                         self.count_reasoning = False
             if self.state.response_buffer:
@@ -1324,104 +1397,9 @@ class Chat:
                     response_lines = self.state.full_response_content.splitlines()
                     if len(response_lines) < self.response_limit:
                         self._update_response(self.state.full_response_content)
-                        self.live.refresh()
                     else:
                         self.count_response = False
             self.last_update_time = current_time
-
-    def _update_reasoning(self, content: str):
-        """Updates reasoning panel content"""
-        self.reasoning_panel.renderable = Text(
-            content,
-            style=REASONING_TEXT_STYLE,
-        )
-
-    def _update_response(self, content: str):
-        """Updates response panel content"""
-        sanitized = sanitize_math_safe(content)
-        self.response_panel.renderable = Markdown(
-            sanitized,
-            code_theme=self.config.rich_code_theme,
-            style=RESPONSE_TEXT_STYLE,
-        )
-
-    # <~~PANELS~~>
-    def spawn_reasoning_panel(self):
-        """Manages the reasoning panel."""
-        if (
-            self.state.reasoning is not None
-            and not self.reasoning_panel_initialized
-            and self.live
-        ):
-            # Reasoning panel constructor
-            self.reasoning_panel = Panel(
-                "",
-                title=REASONING_PANEL_TITLE,
-                title_align=REASONING_TITLE_ALIGN,
-                border_style=REASONING_BORDER_STYLE,
-                width=REASONING_PANEL_WIDTH,
-                box=box.HORIZONTALS,
-                padding=(0, 0),
-            )
-            # Adds the reasoning panel to the live display
-            self.renderables_to_display.insert(0, self.reasoning_panel)
-            self.live.update(Group(*self.renderables_to_display))
-            self.reasoning_panel_initialized = True
-
-    def spawn_response_panel(self):
-        """Manages the response panel."""
-        if (
-            self.state.response is not None
-            and not self.response_panel_initialized
-            and self.live
-        ):
-            # Response panel constructor
-            self.response_panel = Panel(
-                "",
-                title=RESPONSE_PANEL_TITLE,
-                title_align=RESPONSE_TITLE_ALIGN,
-                border_style=RESPONSE_BORDER_STYLE,
-                width=RESPONSE_PANEL_WIDTH,
-                box=box.HORIZONTALS,
-                padding=(0, 0),
-            )
-            # Adds the response panel to the live display, optionally consume the reasoning panel
-            if (
-                self.reasoning_panel in self.renderables_to_display
-                and self.config.reasoning_panel_consume
-            ):
-                self.renderables_to_display.clear()
-            self.renderables_to_display.append(self.response_panel)
-            self.live.update(Group(*self.renderables_to_display))
-            self.response_panel_initialized = True
-
-    def spawn_user_panel(self, content: str):
-        """Places user input into a readable panel. Used for scrollable history in _resurrect_session()."""
-        user_panel = Panel(
-            content,
-            box=box.HORIZONTALS,
-            padding=(0, 0),
-            title=Text("🌐 You", style="bold blue"),
-            title_align="left",
-            border_style="blue",
-        )
-        console.print()
-        console.print(user_panel)
-        console.print()
-
-    def spawn_assistant_panel(self, content: str):
-        """Response panel, but for loaded model reponses. Used for scrollable history in _resurrect_session()."""
-        assistant_panel = Panel(
-            Markdown(
-                sanitize_math_safe(content), code_theme=self.config.rich_code_theme
-            ),
-            box=box.HORIZONTALS,
-            padding=(0, 0),
-            title=Text("💬 Response", style="bold green"),
-            title_align=RESPONSE_TITLE_ALIGN,
-            border_style=RESPONSE_BORDER_STYLE,
-        )
-        console.print(assistant_panel)
 
     def render_history(self):
         """Renders a scrollable history."""
@@ -1434,6 +1412,67 @@ class Chat:
                 self.spawn_user_panel(content)
             elif role == "assistant":
                 self.spawn_assistant_panel(content)
+
+    def _update_reasoning(self, content: str):
+        """Updates reasoning panel content"""
+        self.reasoning_panel.renderable = content
+        if self.live:
+            self.live.refresh()
+
+    def _update_response(self, content: str):
+        """Updates response panel content"""
+        sanitized = sanitize_math_safe(content)
+        self.response_panel.renderable = Markdown(
+            sanitized,
+            code_theme=self.config.rich_code_theme,
+        )
+        if self.live:
+            self.live.refresh()
+
+    def _rebuild_layout(self, force_refresh: bool = False):
+        """Rebuilds the display layout"""
+        # force_refresh: forces an immediate repaint to the terminal
+        if self.live:
+            self.live.update(Group(*self.renderables_to_display), refresh=force_refresh)
+
+    # <~~PANEL SPAWNERS~~>
+    def spawn_reasoning_panel(self):
+        """Manages the reasoning panel."""
+        if self.state.reasoning is not None and not self.reasoning_panel_initialized:
+            # Reasoning panel constructor
+            self.reasoning_panel = self.ui.reasoning_panel_constructor()
+            # Adds the reasoning panel to the live display
+            self.renderables_to_display.append(self.reasoning_panel)
+            self._rebuild_layout()
+            self.reasoning_panel_initialized = True
+
+    def spawn_response_panel(self):
+        """Manages the response panel."""
+        if self.state.response is not None and not self.response_panel_initialized:
+            # Response panel constructor
+            self.response_panel = self.ui.response_panel_constructor()
+            # Adds the response panel to the live display, optionally consume the reasoning panel
+            if (
+                self.reasoning_panel in self.renderables_to_display
+                and self.config.reasoning_panel_consume
+            ):
+                self.renderables_to_display.clear()
+            self.renderables_to_display.append(self.response_panel)
+            self._rebuild_layout()
+            self.response_panel_initialized = True
+
+    def spawn_user_panel(self, content: str):
+        """Spawns the user panel."""
+        user_panel = self.ui.user_panel_constructor(content)
+        console.print()
+        console.print(user_panel)
+        console.print()
+
+    def spawn_assistant_panel(self, content: str):
+        """Spawns the Response panel - for a scrollable history."""
+        self.response_panel = self.ui.response_panel_constructor()
+        self._update_response(content)
+        console.print(self.response_panel)
 
 
 # <~~CONTROLLER~~>
@@ -1448,13 +1487,17 @@ class App:
         except FileNotFoundError:
             self.config.save()
 
-        # Set up all 4 objects
+        # Set up all 6 objects
         self.session_manager = SessionManager(self.config)
+        self.ui = UIConstructor(self.config)
+        self.panel = GlobalPanels(self.session_manager, self.config, self.ui)
         self.file_manager = FileManager(self.session_manager)
         self.commands = CLIController(
-            self.config, self.session_manager, self.file_manager
+            self.config, self.session_manager, self.file_manager, self.panel
         )
-        self.chat = Chat(self.config, self.session_manager, self.file_manager)
+        self.chat = Chat(
+            self.config, self.session_manager, self.file_manager, self.ui, self.panel
+        )
 
         # Give CommandHandler access to Chat for !load and !summary
         self.commands.set_interface(self.chat)
@@ -1463,7 +1506,7 @@ class App:
 
     def run(self):
         """The app runner"""
-        spawn_intro_panel(self.config)
+        self.panel.spawn_intro_panel()
 
         while True:
             self.chat.reset_turn_state()
@@ -1485,7 +1528,10 @@ class App:
             # Handle commands
             command_result = self.commands.handle_input(user_input)
             if command_result is not False:
-                if isinstance(command_result, OpenAI):
+                if isinstance(command_result, tuple):
+                    self.chat.client = command_result[0]
+                    self.chat.model_name = command_result[1]
+                elif isinstance(command_result, OpenAI):
                     self.chat.client = command_result
                 continue
 
@@ -1505,11 +1551,11 @@ def main():
         init_logger()
         setup_keyring_backend()
         # Start a spinner, mostly for cold starts
-        spinner = Spinner(
-            "moon",
-            text="[bold medium_orchid]Launching Local Sage...[/bold medium_orchid]",
-        )
-        with Live(spinner, refresh_per_second=8, console=console):
+        with Live(
+            spinner_constructor("Launching Local Sage..."),
+            refresh_per_second=8,
+            console=console,
+        ):
             app = App()
         console.clear()
         app.run()
@@ -1517,7 +1563,7 @@ def main():
         console.print("[yellow]✨ Farewell![/yellow]\n")
     except Exception as e:
         log_exception(e, "Critical startup error")  # Log any critical errors
-        spawn_error_panel("CRITICAL ERROR", f"{e}")
+        console.print(f"[bold][red]CRITICAL ERROR:[/red][/bold] {e}")
         sys.exit(1)
 
 
