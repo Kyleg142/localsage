@@ -1,3 +1,20 @@
+### v1.2
+
+**New:**
+- Fancy time-to-first-token spinner.
+
+**Technical Improvements:**
+- **API Key:** The CLI now checks the **OPENAI_API_KEY** environment variable before relying on keyring.
+- **Architecture:**
+  - Separation of panel construction from Chat into it's own class called UIConstructor.
+  - The API interaction now exists within it's own method.
+- Thorough code clean up throughout the application.
+  
+**UX:** 
+- Unified input handling and validation for all commands.
+
+---
+
 ### v1.1.5
 **Technical Improvements:**
 - **Architecture:** Turn state has been decoupled and placed into it's own dataclass called TurnState. The rendering engine is now entirely state-based.
