@@ -1,3 +1,11 @@
+### v1.2.1
+
+**Architecture:** Decoupled chart spawning logic.
+
+**UX:** Re-implemented the !sessions and !attachments commands.
+
+---
+
 ### v1.2
 
 **New:**
