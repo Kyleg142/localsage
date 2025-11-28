@@ -159,6 +159,7 @@ COMMAND_COMPLETER = WordCompleter(
         "!reset",
         "!s",
         "!save",
+        "!sessions",
         "!sum",
         "!summary",
         "!switch",
@@ -496,6 +497,73 @@ class UIConstructor:
             expand=False,
         )
 
+    def help_chart_constructor(self) -> Markdown:
+        return Markdown(
+            textwrap.dedent("""
+            | **Profile Management** | *Manage multiple models & API endpoints* |
+            | --- | ----------- |
+            | `!profileadd` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
+            | `!profileremove` | Remove an existing profile. |
+            | `!profiles` | List configured profiles. |
+            | `!switch` | Switch between profiles. |
+
+            | **Configuration** | *Main configuration commands* |
+            | --- | ----------- |
+            | `!config` | Display your current configuration settings and default directories. |
+            | `!consume` | Toggle Reasoning panel consumption.  |
+            | `!ctx` | Set maximum context length (for CLI functionality). |
+            | `!key` | Set an API key, if needed. Your API key is stored in your OS keychain. |
+            | `!prompt` | Set a new system prompt. Takes effect on your next session. |
+            | `!rate` | Set the current refresh rate (default is 30). Higher refresh rate = higher CPU usage. |
+            | `!theme` | Change your Markdown theme. Built-in themes can be found at https://pygments.org/styles/ |
+
+            | **Session Management** | *Session management commands* |
+            | --- | ----------- |
+            | `!s` or `!save` | Save the current session. |
+            | `!l` or `!load` | Load a saved session, including a scrollable conversation history. |
+            | `!sum` or `!summary` | Prompt your model for summarization and start a fresh session with the summary. |
+            | `!sessions` | List all saved sessions. |
+            | `!reset` | Reset for a fresh session. |
+            | `!delete` | Delete a saved session. |
+            | `!clear` | Clear the terminal window. |
+            | `!q` or `!quit` | Exit Local Sage. |
+            | | |
+            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the main prompt. Also acts as an immediate exit. |
+            | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
+
+            | **File Management** | *Commands for attaching and managing files* |
+            | --- | ----------- |
+            | `!a` or `!attach` | Attaches a file to the current session. |
+            | `!attachments` | List all current attachments. |
+            | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
+            | | |
+            | **FILE TYPES:** | All text-based file types are acceptable. |
+            | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
+            """)
+        )
+
+    def settings_chart_constructor(self) -> Markdown:
+        return Markdown(
+            textwrap.dedent(f"""
+            | **Current Settings** | *Your current persistent settings* |
+            | --- | ----------- |
+            | **Profile**: | *{self.config.alias_name}* |
+            | | |
+            | **Model Name**: | *{self.config.model_name}* |
+            | | |
+            | **System Prompt**: | *{self.config.system_prompt}* |
+            | | |
+            | **Context Length**: | *{self.config.context_length}* |
+            | | |
+            | **Refresh Rate**: | *{self.config.refresh_rate}* |
+            | | |
+            | **Markdown Theme**: | *{self.config.rich_code_theme}* |
+            - Your configuration file is located at: `{CONFIG_FILE}`
+            - Your session files are located at:     `{SESSIONS_DIR}`
+            - Your error logs are located at:        `{LOG_DIR}`
+            """)
+        )
+
 
 class GlobalPanels:
     def __init__(self, session: SessionManager, config: Config, ui: UIConstructor):
@@ -570,15 +638,17 @@ class CLIController:
         session: SessionManager,
         filemanager: FileManager,
         panel: GlobalPanels,
+        ui: UIConstructor,
     ):
         self.config: Config = config
+        self.ui: UIConstructor = ui
         self.session: SessionManager = session
         self.filemanager: FileManager = filemanager
         self.panel: GlobalPanels = panel
         self.filepath_history = InMemoryHistory()
         self.interface = None
 
-        # Command dict (seriously rocks, much better than an 'if block' mess)
+        # Command dict
         self.commands = {
             "!h": self.spawn_help_chart,
             "!help": self.spawn_help_chart,
@@ -588,8 +658,10 @@ class CLIController:
             "!load": self.load_session,
             "!a": self.attach_file,
             "!attach": self.attach_file,
+            "!attachments": self.list_attachments,
             "!purge": self.purge_attachment,
             "!consume": self.toggle_consume,
+            "!sessions": self.list_sessions,
             "!delete": self.delete_session,
             "!reset": self.reset_session,
             "!sum": self.summarize_session,
@@ -642,74 +714,12 @@ class CLIController:
     # <~~CHARTS~~>
     def spawn_help_chart(self):
         """Markdown usage chart."""
-        help_markdown = Markdown(
-            textwrap.dedent("""
-            | **Profile Management** | *Manage multiple models & API endpoints* |
-            | --- | ----------- |
-            | `!profileadd` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
-            | `!profileremove` | Remove an existing profile. |
-            | `!profiles` | List configured profiles. |
-            | `!switch` | Switch between profiles. |
-
-            | **Configuration** | *Main configuration commands* |
-            | --- | ----------- |
-            | `!config` | Display your current configuration settings and default directories. |
-            | `!consume` | Toggle Reasoning panel consumption.  |
-            | `!ctx` | Set maximum context length (for CLI functionality). |
-            | `!key` | Set an API key, if needed. Your API key is stored in your OS keychain. |
-            | `!prompt` | Set a new system prompt. Takes effect on your next session. |
-            | `!rate` | Set the current refresh rate (default is 30). Higher refresh rate = higher CPU usage. |
-            | `!theme` | Change your Markdown theme. Built-in themes can be found at https://pygments.org/styles/ |
-
-            | **Session Management** | *Session management commands* |
-            | --- | ----------- |
-            | `!s` or `!save` | Save the current session. |
-            | `!l` or `!load` | Load a saved session, including a scrollable conversation history. |
-            | `!sum` or `!summary` | Prompt your model for summarization and start a fresh session with the summary. |
-            | `!reset` | Reset for a fresh session. |
-            | `!delete` | Delete a saved session. |
-            | `!clear` | Clear the terminal window. |
-            | `!q` or `!quit` | Exit Local Sage. |
-            | | |
-            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the main prompt. Also acts as an immediate exit. |
-            | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
-
-            | **File Management** | *Commands for attaching and managing files* |
-            | --- | ----------- |
-            | `!a` or `!attach` | Attaches a file to the current session. |
-            | `!attachments` | List all current attachments. |
-            | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
-            | | |
-            | **FILE TYPES:** | All text-based file types are acceptable. |
-            | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
-            """)
-        )
-        console.print(help_markdown)
+        console.print(self.ui.help_chart_constructor())
         console.print()
 
     def spawn_settings_chart(self):
         """Markdown settings chart."""
-        settings_markdown = Markdown(
-            textwrap.dedent(f"""
-            | **Current Settings** | *Your current persistent settings* |
-            | --- | ----------- |
-            | **Profile**: | *{self.config.alias_name}* |
-            | | |
-            | **Model Name**: | *{self.config.model_name}* |
-            | | |
-            | **System Prompt**: | *{self.config.system_prompt}* |
-            | | |
-            | **Context Length**: | *{self.config.context_length}* |
-            | | |
-            | **Refresh Rate**: | *{self.config.refresh_rate}* |
-            | | |
-            | **Markdown Theme**: | *{self.config.rich_code_theme}* |
-            - Your configuration file is located at: `{CONFIG_FILE}`
-            - Your session files are located at:     `{SESSIONS_DIR}`
-            - Your error logs are located at:        `{LOG_DIR}`
-            """)
-        )
-        console.print(settings_markdown)
+        console.print(self.ui.settings_chart_constructor())
         console.print()
 
     # <~~MAIN CONFIG~~>
@@ -1064,8 +1074,22 @@ class CLIController:
         console.print("[green]Summarization complete! New session primed.[/green]")
         self.panel.spawn_status_panel()
 
-    def _list_sessions(self) -> bool:
+    def list_sessions(self):
         """Fetches the session list and displays it."""
+        sessions = self.session.find_sessions()
+
+        if not sessions:
+            console.print("[dim]No saved sessions found.[/dim]\n")
+            return
+
+        console.print("[cyan]Available sessions:[/cyan]")
+        for s in sessions:
+            console.print(f"• {s}", highlight=False)
+        console.print()
+
+    def _list_sessions(self) -> bool:
+        """Helper version"""
+        # Both will be merged eventually
         sessions = self.session.find_sessions()
 
         if not sessions:
@@ -1139,11 +1163,19 @@ class CLIController:
             self.panel.spawn_error_panel("ERROR READING FILE", f"{e}")
             return
 
+    def list_attachments(self):
+        """List attachments"""
+        attachments = self.filemanager._get_attachments()
+        if not attachments:
+            console.print("[dim]No attachments found.[/dim]\n")
+            return
+        console.print("[cyan]Attachments in context:[/cyan]")
+        for _, kind, name in attachments:
+            console.print(f"• [{kind}] {name}")
+        console.print()
+
     def purge_attachment(self):
-        """
-        Purges files/images from context and recovers context length.
-        """
-        # Generate the attachment list
+        """Purges files/images from context and recovers context length"""
         attachments = self.filemanager._get_attachments()
         if not attachments:
             console.print("[dim]No attachments found.[/dim]\n")
@@ -1493,7 +1525,7 @@ class App:
         self.panel = GlobalPanels(self.session_manager, self.config, self.ui)
         self.file_manager = FileManager(self.session_manager)
         self.commands = CLIController(
-            self.config, self.session_manager, self.file_manager, self.panel
+            self.config, self.session_manager, self.file_manager, self.panel, self.ui
         )
         self.chat = Chat(
             self.config, self.session_manager, self.file_manager, self.ui, self.panel
