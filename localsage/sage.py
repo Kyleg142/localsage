@@ -370,10 +370,7 @@ class SessionManager:
 
 
 class FileManager:
-    """
-    Handles file management.
-    - Attachment related I/O
-    """
+    """Handles file management attachment-related I/O"""
 
     def __init__(self, session: SessionManager):
         self.session: SessionManager = session
@@ -389,7 +386,7 @@ class FileManager:
         content = content.replace("```", "ʼʼʼ")
         filename = os.path.basename(path)
         wrapped = f"---\nFile: `{os.path.basename(path)}`\n```\n{content}\n```\n---"
-        existing = [(i, t, n) for i, t, n in self._get_attachments() if n == filename]
+        existing = [(i, t, n) for i, t, n in self.get_attachments() if n == filename]
         is_update = False
 
         # If the file exists already in context, delete it.
@@ -403,15 +400,15 @@ class FileManager:
 
     def remove_attachment(self, target_name: str) -> str | None:
         """Removes an attachment by name."""
-        attachments = self._get_attachments()
+        attachments = self.get_attachments()
         for index, kind, name in reversed(attachments):
             if target_name.lower().strip() == name.lower():
                 self.session.remove_history(index)
                 return kind  # For the UI to catch
         return None
 
-    def _get_attachments(self) -> list[tuple[int, str, str]]:
-        """Retrieves a list of all attachments by utilizing compiled regex."""
+    def get_attachments(self) -> list[tuple[int, str, str]]:
+        """Retrieves a list of all attachments by utilizing regex."""
         attachments: list[tuple[int, str, str]] = []
         # Iterate through all messages in the conversation history
         for i, msg in enumerate(self.session.history):
@@ -432,8 +429,11 @@ class FileManager:
 
 # <~~USER INTERFACE~~~>
 class UIConstructor:
-    def __init__(self, config: Config):
+    """Constructs and returns various UI objects"""
+
+    def __init__(self, config: Config, session: SessionManager):
         self.config = config
+        self.session = session
 
     def reasoning_panel_constructor(self) -> Panel:
         return Panel(
@@ -470,7 +470,28 @@ class UIConstructor:
             style="default",
         )
 
-    def status_panel_constructor(self, status_text: Text) -> Panel:
+    def status_panel_constructor(self) -> Panel:
+        total_tokens = self.session.count_tokens()
+        context_percentage = round((total_tokens / self.config.context_length) * 100, 1)
+
+        # Colorize context percentage based on context consumption
+        context_color: str = "dim"
+        if context_percentage >= 50 and context_percentage < 80:
+            context_color = "yellow"
+        elif context_percentage >= 80:
+            context_color = "red"
+
+        # Turn counter
+        turns = sum(1 for m in self.session.history if m["role"] == "user")
+
+        # Status panel content
+        status_text = Text.assemble(
+            (" ", "cyan"),
+            ("Context: "),
+            (f"{context_percentage}%", f"{context_color}"),
+            (" | "),
+            (f"Turn: {turns}"),
+        )
         return Panel(
             status_text,
             border_style="dim",
@@ -478,7 +499,15 @@ class UIConstructor:
             expand=False,
         )
 
-    def intro_panel_constructor(self, intro_text: Text) -> Panel:
+    def intro_panel_constructor(self) -> Panel:
+        intro_text = Text.assemble(
+            ("Model: ", "bold sandy_brown"),
+            (f"{self.config.model_name}"),
+            ("\nProfile: ", "bold sandy_brown"),
+            (f"{self.config.alias_name}"),
+            ("\nSystem Prompt: ", "bold sandy_brown"),
+            (f"{self.config.system_prompt}", "italic"),
+        )
         return Panel(
             intro_text,
             title=Text(f"🔮 Local Sage {__version__}", "bold medium_orchid"),
@@ -566,6 +595,8 @@ class UIConstructor:
 
 
 class GlobalPanels:
+    """Global panel collector"""
+
     def __init__(self, session: SessionManager, config: Config, ui: UIConstructor):
         self.session: SessionManager = session
         self.config: Config = config
@@ -573,58 +604,19 @@ class GlobalPanels:
 
     def spawn_intro_panel(self):
         """Simple welcome panel, prints on application launch."""
-        # Intro panel content
-        intro_text = Text.assemble(
-            ("Model: ", "bold sandy_brown"),
-            (f"{self.config.model_name}"),
-            ("\nProfile: ", "bold sandy_brown"),
-            (f"{self.config.alias_name}"),
-            ("\nSystem Prompt: ", "bold sandy_brown"),
-            (f"{self.config.system_prompt}", "italic"),
-        )
-
-        # Intro panel constructor
-        intro_panel = self.ui.intro_panel_constructor(intro_text)
-
-        console.print(intro_panel)
+        console.print(self.ui.intro_panel_constructor())
         console.print(Markdown("Type `!h` for a list of commands."))
         console.print()
 
     def spawn_status_panel(self):
-        """
-        Constructs and prints a status panel.
-        """
-        total_tokens = self.session.count_tokens()
-        context_percentage = round((total_tokens / self.config.context_length) * 100, 1)
-
-        # Colorize context percentage based on context consumption
-        context_color: str = "dim"
-        if context_percentage >= 50 and context_percentage < 80:
-            context_color = "yellow"
-        elif context_percentage >= 80:
-            context_color = "red"
-
-        # Turn counter
-        turns = sum(1 for m in self.session.history if m["role"] == "user")
-
-        # Status panel content
-        status_text = Text.assemble(
-            (" ", "cyan"),
-            ("Context: "),
-            (f"{context_percentage}%", f"{context_color}"),
-            (" | "),
-            (f"Turn: {turns}"),
-        )
-
+        """Prints a status panel."""
         # Status panel constructor
-        status_panel = self.ui.status_panel_constructor(status_text)
-        console.print(status_panel)
+        console.print(self.ui.status_panel_constructor())
         console.print()
 
     def spawn_error_panel(self, error: str, exception: str):
         """Error panel template for Local Sage, used in Chat() and main()"""
-        error_panel = self.ui.error_panel_constructor(error, exception)
-        console.print(error_panel)
+        console.print(self.ui.error_panel_constructor(error, exception))
         console.print()
 
 
@@ -1165,7 +1157,7 @@ class CLIController:
 
     def list_attachments(self):
         """List attachments"""
-        attachments = self.filemanager._get_attachments()
+        attachments = self.filemanager.get_attachments()
         if not attachments:
             console.print("[dim]No attachments found.[/dim]\n")
             return
@@ -1176,7 +1168,7 @@ class CLIController:
 
     def purge_attachment(self):
         """Purges files/images from context and recovers context length"""
-        attachments = self.filemanager._get_attachments()
+        attachments = self.filemanager.get_attachments()
         if not attachments:
             console.print("[dim]No attachments found.[/dim]\n")
             return
@@ -1327,12 +1319,12 @@ class Chat:
                 self.update_renderables()
             time.sleep(0.02)  # Small timeout before buffers are flushed
             self.buffer_flusher()
-        # Allows the user to safely use Ctrl+C to end streaming abruptly
+        # Ctrl + C interrupt support
         except KeyboardInterrupt:
             self.reset_turn_state()
             self._rebuild_layout()
             self.cancel_requested = True
-        # Non-quit exception catcher for errors that occur during the API call
+        # Non-quit exception catcher
         except Exception as e:
             log_exception(e, "Error in stream_response()")
             self.reset_turn_state()
@@ -1495,9 +1487,8 @@ class Chat:
 
     def spawn_user_panel(self, content: str):
         """Spawns the user panel."""
-        user_panel = self.ui.user_panel_constructor(content)
         console.print()
-        console.print(user_panel)
+        console.print(self.ui.user_panel_constructor(content))
         console.print()
 
     def spawn_assistant_panel(self, content: str):
@@ -1521,7 +1512,7 @@ class App:
 
         # Set up all 6 objects
         self.session_manager = SessionManager(self.config)
-        self.ui = UIConstructor(self.config)
+        self.ui = UIConstructor(self.config, self.session_manager)
         self.panel = GlobalPanels(self.session_manager, self.config, self.ui)
         self.file_manager = FileManager(self.session_manager)
         self.commands = CLIController(
@@ -1531,7 +1522,7 @@ class App:
             self.config, self.session_manager, self.file_manager, self.ui, self.panel
         )
 
-        # Give CommandHandler access to Chat for !load and !summary
+        # Give CLIController access to Chat for !load and !summary
         self.commands.set_interface(self.chat)
         # Prompt history
         self.main_history = InMemoryHistory()
