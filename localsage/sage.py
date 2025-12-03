@@ -180,9 +180,7 @@ console = Console()
 
 # <~~CONFIG STATE~~>
 class Config:
-    """
-    User-facing configuration variables.
-    """
+    """User-facing configuration variables"""
 
     def __init__(self):
         """Initialization for configurable variables."""
@@ -243,8 +241,8 @@ class SessionManager:
     """
     Handles session management
     - Session-related I/O
-    - Session history management
-    - Token caching
+    - Session history
+    - Session tokenization
     """
 
     def __init__(self, config: Config):
@@ -349,6 +347,9 @@ class SessionManager:
                 total += cached[1]
         return total
 
+    def count_turns(self) -> int:
+        return sum(1 for m in self.history if m["role"] == "user")
+
     def _json_helper(self, file_name: str) -> str:
         """
         JSON extension helper.
@@ -370,7 +371,7 @@ class SessionManager:
 
 
 class FileManager:
-    """Handles file management attachment-related I/O"""
+    """Handles file management (I/O)"""
 
     def __init__(self, session: SessionManager):
         self.session: SessionManager = session
@@ -385,7 +386,7 @@ class FileManager:
 
         content = content.replace("```", "ʼʼʼ")
         filename = os.path.basename(path)
-        wrapped = f"---\nFile: `{os.path.basename(path)}`\n```\n{content}\n```\n---"
+        wrapped = f"---\nFile: `{filename}`\n```\n{content}\n```\n---"
         existing = [(i, t, n) for i, t, n in self.get_attachments() if n == filename]
         is_update = False
 
@@ -419,6 +420,13 @@ class FileManager:
                     # Append each attachment to a new structured list
                     attachments.append((i, "file", match.group(1)))
         return attachments
+
+    def file_validator(self) -> Validator:
+        return Validator.from_callable(
+            self._file_validator,
+            error_message="File does not exist.",
+            move_cursor_to_end=True,
+        )
 
     def _file_validator(self, text: str) -> bool:
         """File validation helper for prompt_toolkit"""
@@ -471,8 +479,10 @@ class UIConstructor:
         )
 
     def status_panel_constructor(self) -> Panel:
-        total_tokens = self.session.count_tokens()
-        context_percentage = round((total_tokens / self.config.context_length) * 100, 1)
+        turns = self.session.count_turns()
+        context_percentage = round(
+            (self.session.count_tokens() / self.config.context_length) * 100, 1
+        )
 
         # Colorize context percentage based on context consumption
         context_color: str = "dim"
@@ -480,9 +490,6 @@ class UIConstructor:
             context_color = "yellow"
         elif context_percentage >= 80:
             context_color = "red"
-
-        # Turn counter
-        turns = sum(1 for m in self.session.history if m["role"] == "user")
 
         # Status panel content
         status_text = Text.assemble(
@@ -595,7 +602,7 @@ class UIConstructor:
 
 
 class GlobalPanels:
-    """Global panel collector"""
+    """Global panel spawner"""
 
     def __init__(self, session: SessionManager, config: Config, ui: UIConstructor):
         self.session: SessionManager = session
@@ -683,17 +690,14 @@ class CLIController:
                 cmd in ("!q", "!quit", "!sum", "!summarize", "!l", "!load")
                 and len(self.session.history) > 1
             ):
-                choice = (
-                    prompt(
-                        HTML(
-                            "Save first? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
-                        )
-                    )
-                    .lower()
-                    .strip()
+                choice = self._prompt_wrapper(
+                    HTML("Save first? (<seagreen>y</seagreen>/<ansired>N</ansired>): "),
+                    allow_empty=True,
                 )
-                if choice in ("y", "yes"):
+                if choice and choice.lower() in ("y", "yes"):
                     self.save_session()
+                elif choice is None:
+                    return True
             if cmd in ("!q", "!quit"):
                 console.print("[yellow]✨ Farewell![/yellow]\n")
             return self.commands[cmd]()
@@ -717,10 +721,10 @@ class CLIController:
     # <~~MAIN CONFIG~~>
     def set_system_prompt(self):
         """Sets a new persistent system prompt within the config file."""
-        try:
-            sysprompt = prompt(HTML("Enter a system prompt<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
+        sysprompt = self._prompt_wrapper(
+            HTML("Enter a system prompt<seagreen>:</seagreen> "), allow_empty=True
+        )
+        if sysprompt is None:
             return
 
         self.config.system_prompt = sysprompt
@@ -733,14 +737,10 @@ class CLIController:
 
     def set_context_length(self):
         """Sets a new persistent context length"""
-        try:
-            ctx = prompt(HTML("Enter a max context length<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        if not ctx.strip():
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+        ctx = self._prompt_wrapper(
+            HTML("Enter a max context length<seagreen>:</seagreen> ")
+        )
+        if ctx is None:
             return
 
         try:
@@ -758,19 +758,9 @@ class CLIController:
         console.print(f"[green]Context length set to:[/green] {value}\n")
 
     def set_api_key(self) -> OpenAI | None:
-        """
-        Allows the user to set an API key.
-
-        SAFELY stores the user's API key with keyring
-        """
-        try:
-            new_key = prompt(HTML("Enter an API key<seagreen>:</seagreen> ")).strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        if not new_key:
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+        """Allows the user to set an API key. SAFELY stores the user's API key with keyring"""
+        new_key = self._prompt_wrapper(HTML("Enter an API key<seagreen>:</seagreen> "))
+        if new_key is None:
             return
 
         try:
@@ -786,14 +776,8 @@ class CLIController:
 
     def set_refresh_rate(self):
         """Set a new custom refresh rate"""
-        try:
-            rate = prompt(HTML("Enter a refresh rate<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]\n")
-            return
-
-        if not rate.strip():
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
+        rate = self._prompt_wrapper(HTML("Enter a refresh rate<seagreen>:</seagreen> "))
+        if rate is None:
             return
 
         try:
@@ -812,16 +796,13 @@ class CLIController:
 
     def set_code_theme(self):
         """Allows the user to change out the rich markdown theme"""
-        try:
-            theme = prompt(HTML("Enter a valid theme name<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Edit canceled.[/dim]")
+        theme = self._prompt_wrapper(
+            HTML("Enter a valid theme name<seagreen>:</seagreen> ")
+        )
+        if theme is None:
             return
-        if not theme.strip():
-            console.print("[dim]Edit canceled. No input provided.[/dim]\n")
-            return
-        theme = theme.lower()  # All theme names are lowercase
-        self.config.rich_code_theme = theme
+
+        self.config.rich_code_theme = theme.lower()
         self.config.save()
         console.print(f"[green]Your theme has been set to: [/green]{theme}\n")
 
@@ -846,18 +827,14 @@ class CLIController:
 
     def add_model(self):
         """Interactively add a model profile."""
-        try:
-            alias = prompt(HTML("Profile name<seagreen>:</seagreen> ")).strip()
-            name = prompt(HTML("Model name<seagreen>:</seagreen> ")).strip()
-            endpoint = prompt(HTML("API endpoint<seagreen>:</seagreen> ")).strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Profile addition canceled.[/dim]\n")
+        alias = self._prompt_wrapper(HTML("Profile name<seagreen>:</seagreen> "))
+        if alias is None:
             return
-
-        if not alias or not endpoint:
-            console.print(
-                "[red]Profile name and API endpoint are required fields.[/red]\n"
-            )
+        name = self._prompt_wrapper(HTML("Model name<seagreen>:</seagreen> "))
+        if name is None:
+            return
+        endpoint = self._prompt_wrapper(HTML("API endpoint<seagreen>:</seagreen> "))
+        if endpoint is None:
             return
 
         if any(m["alias"] == alias for m in self.config.models):
@@ -867,7 +844,7 @@ class CLIController:
         self.config.models.append(
             {
                 "alias": alias,
-                "name": name or "Unnamed",
+                "name": name,
                 "endpoint": endpoint,
                 "api_key": "stored",
             }
@@ -878,13 +855,8 @@ class CLIController:
     def remove_model(self):
         """Remove a model profile by alias."""
         self.list_models()
-        try:
-            alias = prompt(HTML("Profile to remove<seagreen>:</seagreen> ")).strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Canceled.[/dim]\n")
-            return
-        if not alias.strip():
-            console.print("[dim]No input detected.[/dim]\n")
+        alias = self._prompt_wrapper(HTML("Profile to remove<seagreen>:</seagreen> "))
+        if alias is None:
             return
 
         if alias == self.config.active_model:
@@ -903,15 +875,10 @@ class CLIController:
         """Switch active model profile by alias."""
         if not alias:
             self.list_models()
-            try:
-                alias = prompt(
-                    HTML("Enter a profile name<seagreen>:</seagreen> ")
-                ).strip()
-            except (KeyboardInterrupt, EOFError):
-                console.print("[dim]Canceled.[/dim]\n")
-                return
-            if not alias.strip():
-                console.print("[dim]No input detected.[/dim]\n")
+            alias = self._prompt_wrapper(
+                HTML("Enter a profile name<seagreen>:</seagreen> ")
+            )
+            if alias is None:
                 return
 
         match = next((m for m in self.config.models if m["alias"] == alias), None)
@@ -936,15 +903,9 @@ class CLIController:
         if self.session.active_session:
             file_name = self.session.active_session
         else:
-            try:
-                file_name = prompt(self.session_prompt)
-            except (KeyboardInterrupt, EOFError):
-                console.print("[dim]Saving canceled[/dim]\n")
+            file_name = self._prompt_wrapper(self.session_prompt)
+            if file_name is None:
                 return
-
-        if not file_name.strip():
-            console.print("[dim]Saving canceled. No name entered.[/dim]\n")
-            return
 
         file_path = self.session._json_helper(file_name)
         try:
@@ -959,20 +920,14 @@ class CLIController:
 
     def load_session(self):
         """Loads a session from a .json file"""
-        try:
-            if not self._list_sessions():
-                return
-            file_name = prompt(
-                self.session_prompt,
-                completer=self.session._session_completer(),
-                style=COMPLETER_STYLER,
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Loading canceled.[/dim]\n")
+        if not self._list_sessions():
             return
-
-        if not file_name.strip():
-            console.print("[dim]Saving canceled. No name entered.[/dim]\n")
+        file_name = self._prompt_wrapper(
+            self.session_prompt,
+            completer=self.session._session_completer(),
+            style=COMPLETER_STYLER,
+        )
+        if file_name is None:
             return
 
         file_path = self.session._json_helper(file_name)
@@ -998,20 +953,14 @@ class CLIController:
 
     def delete_session(self):
         """Session deleter. Also lists files for user friendliness."""
-        try:
-            if not self._list_sessions():
-                return
-            file_name = prompt(
-                self.session_prompt,
-                completer=self.session._session_completer(),
-                style=COMPLETER_STYLER,
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]Deletion canceled.[/dim]\n")
+        if not self._list_sessions():
             return
-
-        if not file_name.strip():
-            console.print("[dim]Deletion canceled. No name entered.[/dim]\n")
+        file_name = self._prompt_wrapper(
+            self.session_prompt,
+            completer=self.session._session_completer(),
+            style=COMPLETER_STYLER,
+        )
+        if file_name is None:
             return
 
         file_path = self.session._json_helper(file_name)
@@ -1097,29 +1046,15 @@ class CLIController:
     # <~~FILE MANAGEMENT~~>
     def attach_file(self):
         """Command structure for reading a file from disk"""
-        # Setup for prompt_toolkit's validator and path completer
-        file_completer = PathCompleter(expanduser=True)
-        validator = Validator.from_callable(
-            self.filemanager._file_validator,
-            error_message="File does not exist.",
-            move_cursor_to_end=True,
+        path = self._prompt_wrapper(
+            HTML("Enter file path<seagreen>:</seagreen> "),
+            completer=PathCompleter(expanduser=True),
+            validator=self.filemanager.file_validator(),
+            validate_while_typing=False,
+            style=COMPLETER_STYLER,
+            history=self.filepath_history,
         )
-
-        try:
-            # Prompt for a filepath
-            path = prompt(
-                HTML("Enter file path<seagreen>:</seagreen> "),
-                completer=file_completer,
-                validator=validator,
-                validate_while_typing=False,
-                style=COMPLETER_STYLER,
-                history=self.filepath_history,
-            )
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]File read canceled.[/dim]\n")
-            return
-        if not path.strip():
-            console.print("[dim]No input detected.[/dim]\n")
+        if path is None:
             return
 
         # Normalize path input and check file size
@@ -1130,18 +1065,16 @@ class CLIController:
             console.print(
                 f"[yellow]Warning:[/yellow] File is {file_size / 1_000_000:.2f} MB and may consume a large amount of context."
             )
-            choice = (
-                prompt(
-                    HTML(
-                        "Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "
-                    )
-                )
-                .lower()
-                .strip()
+            choice = self._prompt_wrapper(
+                HTML("Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "),
+                allow_empty=True,
             )
-            if choice not in ("y", "yes"):
-                console.print("[dim]Attachment canceled by user.[/dim]\n")
+            if choice is None:
                 return
+            if choice.lower() not in ("y", "yes"):
+                console.print("[dim]Attachment canceled.[/dim]\n")
+                return
+
         try:
             is_update = self.filemanager.process_file(path)
             filename = os.path.basename(path)
@@ -1178,13 +1111,10 @@ class CLIController:
         console.print()
 
         # Prompt for a file to purge
-        try:
-            choice = prompt(HTML("Enter file name to remove<seagreen>:</seagreen> "))
-        except (KeyboardInterrupt, EOFError):
-            console.print("[dim]File purge canceled.[/dim]\n")
-            return
-        if not choice.strip():
-            console.print("[dim]No input detected.[/dim]\n")
+        choice = self._prompt_wrapper(
+            HTML("Enter file name to remove<seagreen>:</seagreen> ")
+        )
+        if choice is None:
             return
 
         # And purge the file from the session
@@ -1196,6 +1126,23 @@ class CLIController:
             self.panel.spawn_status_panel()
         else:
             console.print(f"[red]No match found for:[/red] '{choice}'\n")
+
+    # <~~PROMPT WRAPPER~~>
+    def _prompt_wrapper(
+        self, prefix, cancel_msg="Canceled.", allow_empty=False, **kwargs
+    ) -> str | None:
+        """Prompt_toolkit wrapper for validating input."""
+        try:
+            # **kwargs passes completers, styles, history, etc automatically
+            user_input = prompt(prefix, **kwargs)
+            stripped = user_input.strip()
+            if not stripped and not allow_empty:
+                console.print("[dim]No input detected.[/dim]\n")
+                return None
+            return stripped
+        except (KeyboardInterrupt, EOFError):
+            console.print(f"[dim]{cancel_msg}[/dim]\n")
+            return None
 
 
 @dataclass
@@ -1512,9 +1459,9 @@ class App:
 
         # Set up all 6 objects
         self.session_manager = SessionManager(self.config)
+        self.file_manager = FileManager(self.session_manager)
         self.ui = UIConstructor(self.config, self.session_manager)
         self.panel = GlobalPanels(self.session_manager, self.config, self.ui)
-        self.file_manager = FileManager(self.session_manager)
         self.commands = CLIController(
             self.config, self.session_manager, self.file_manager, self.panel, self.ui
         )
