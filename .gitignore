@@ -1,11 +1,10 @@
+# Python stuff
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 .ruff_cache/
-
-# C extensions
-*.so
+.uv/
 
 # Distribution / packaging
 build/
@@ -14,10 +13,6 @@ dist/
 *.egg
 pip-wheel-metadata/
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
 # Tests / coverage reports
 htmlcov/
 .tox/
@@ -25,7 +20,6 @@ htmlcov/
 .coverage
 .coverage.*
 .cache/
-pytest_cache/
 nosetests.xml
 coverage.xml
 
@@ -37,7 +31,7 @@ env/
 .local/
 .python-version
 
-# IDE / editor specifics
+# IDE / editor stuff
 .vscode/
 .idea/
 *.swp
