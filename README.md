@@ -38,7 +38,8 @@ The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your
 You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**.
 
 ## Installation 💽
-Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.
+Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.\
+Local Sage can also be ran in a container via Docker.
 
 ###### For `uv`, open your terminal and type:
 ```bash
@@ -60,6 +61,41 @@ Configuration is done entirely through interactive commands. You never have to t
 **Typical API endpoint format:** `http://ipaddress:port/v1`
 
 **Tip:** If you press `tab` while at the main prompt, you can access a command completer for easy command use.
+
+### Docker 🐋
+A bash script is available for Linux & Mac users for easy Dockerization! \
+Start by creating and setting a working directory, then...
+1) Clone the repo:
+```bash
+git clone https://github.com/Kyleg142/localsage
+```
+2) Build the image:
+```bash
+chmod u+x containerizer.sh
+./containerizer.sh build
+```
+3) Run the container (with default settings):
+```bash
+./containerizer.sh run
+```
+Or, to Dockerize Local Sage manually:
+```bash
+# Perform step 1 above, and then...
+# 2) Build the image
+docker image build -t python-localsage .
+
+# 3) Run the container, most arguments are customizable
+docker run -it --rm \     
+  --name localsage \ 
+  --network host \     # Set 'host' to your API endpoint IP
+  -e OPENAI_API_KEY \
+  -v /var/lib/LocalSage:/root/.local/share/LocalSage \
+  python-localsage
+```
+You can also use the included script to remove the installed image:
+```bash
+./containerizer.sh uninstall
+```
 
 ### Dependencies 🧰
 Local Sage is designed with minimal dependencies, keeping the download light and minimizing library bloat.
