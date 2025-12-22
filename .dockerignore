@@ -1,0 +1,49 @@
+# Git repo extras
+.github/
+.gitignore
+README.md
+CHANGELOG.md
+LICENSE
+assets/
+
+# Python stuff
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.uv/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Tests / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+
+# Virtual environments
+.venv/
+venv/
+.env/
+env/
+.local/
+.python-version
+
+# IDE / editor stuff
+.vscode/
+.idea/
+*.swp
+
+# OS junk
+.DS_Store
+Thumbs.db
