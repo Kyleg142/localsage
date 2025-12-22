@@ -1,3 +1,11 @@
+### v1.2.2
+
+**Dockerization!** Local Sage can now be ran easily in Docker! Instructions are now in the readme.
+
+**Bug Fix:** Added logic to gracefully handle any lingering keyring errors.
+
+---
+
 ### v1.2.1
 
 **Architecture:** Decoupled chart spawning logic.
