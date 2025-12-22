@@ -1,6 +1,6 @@
 ### v1.2.2
 
-**Dockerization!:** Local Sage can now be ran easily in Docker! Instructions are are now posted.
+**Dockerization!:** Local Sage can now be ran easily in Docker! Instructions are now posted at the front of the repo.
 
 **Bug Fix:** Added logic to gracefully handle any lingering keyring errors.
 
