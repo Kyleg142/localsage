@@ -101,9 +101,16 @@ def setup_keyring_backend():
 
 
 def retrieve_key() -> str:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = ""
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+    except Exception:
+        pass
     if not api_key:
-        api_key = get_password("LocalSageAPI", USER_NAME)
+        try:
+            api_key = get_password("LocalSageAPI", USER_NAME)
+        except Exception:
+            pass
     if not api_key:
         api_key = "dummy-key"
     return api_key
