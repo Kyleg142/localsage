@@ -1,3 +1,11 @@
+# Git repo extras
+.github/
+.gitignore
+README.md
+CHANGELOG.md
+LICENSE
+assets/
+
 # Python stuff
 __pycache__/
 *.py[cod]
