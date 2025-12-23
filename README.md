@@ -164,7 +164,7 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 
 Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have to swap your API key with `!key`.
 
-## What is next?
+## What is Next?
 Upcoming features, in order:
 - In-line arguments/options for all commands. Commands are a bit clunky right now.
   - Ex: `!a ~/Projects/project/file.txt` and `!switch profilename`
