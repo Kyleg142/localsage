@@ -64,11 +64,10 @@ def init_logger():
     date_str = datetime.now().strftime("%Y%m%d")
     # Output example: localsage_20251109.log
     log_path = os.path.join(LOG_DIR, f"localsage_{date_str}.log")
-    # Set up the file handler, max of 3 backups, max size of 1MB
+    # Max of 3 backups, max size of 1MB
     handler = RotatingFileHandler(
         log_path, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
     )
-    # Define the log file format
     logging.basicConfig(
         level=logging.ERROR,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -101,6 +100,11 @@ def setup_keyring_backend():
 
 
 def retrieve_key() -> str:
+    """
+    Attempts to retrieve a stored API key
+
+    Prio: OPENAI_API_KEY env variable -> OS keyring entry -> Dummy key
+    """
     api_key = ""
     try:
         api_key = os.getenv("OPENAI_API_KEY")
@@ -259,7 +263,7 @@ class SessionManager:
         ]
         self.active_session: str = ""
         self.encoder = tiktoken.get_encoding("o200k_base")
-        self.token_cache: list[tuple[str, int] | None] = []
+        self.token_cache: list[tuple[int, int] | None] = []
 
     def save_to_disk(self, filepath: str):
         """Save the current session to disk"""
@@ -320,36 +324,33 @@ class SessionManager:
 
     def count_tokens(self) -> int:
         """Counts and caches tokens."""
-        # Ensure cache aligns with current conversation history length
-        if len(self.token_cache) > len(self.history):
-            self.token_cache = self.token_cache[: len(self.history)]
-        while len(self.token_cache) < len(self.history):
-            self.token_cache.append(None)
-        total = 0
+        # Ensure cache length matches history
+        cache: list[tuple[int, int] | None] = self.token_cache
+        diff = len(self.history) - len(cache)
+        if diff > 0:
+            cache.extend([None] * diff)
+        elif diff < 0:
+            del cache[len(self.history) :]
 
-        # Start counting tokens
+        # Count tokens, then cache and return the total token count
+        total = 0
         for i, msg in enumerate(self.history):
-            raw_content = msg.get("content")
-            text: str
-            # Process raw_content depending on it's type
-            if raw_content is None:
-                text = ""
-            elif isinstance(raw_content, str):
-                text = raw_content
-            elif isinstance(raw_content, list):
-                parts = [p.get("text", "") for p in raw_content if isinstance(p, dict)]
-                text = " ".join(parts) if parts else ""
+            raw_content = msg.get("content") or ""
+            if isinstance(raw_content, list):
+                text = "".join(
+                    p.get("text", "") for p in raw_content if isinstance(p, dict)
+                )
             else:
                 text = str(raw_content)
-            cached = self.token_cache[i]
-            if cached is None or cached[0] != text:
+            text_hash = hash(text)
+            cached = cache[i]
+            if cached is None or cached[0] != text_hash:
                 try:
-                    token_count = len(self.encoder.encode(text))
-                # Cache protection, to deter critical exceptions
+                    count = len(self.encoder.encode(text))
                 except Exception:
-                    token_count = 0
-                self.token_cache[i] = (text, token_count)  # Expand the cache
-                total += token_count
+                    count = 0
+                cache[i] = (text_hash, count)
+                total += count
             else:
                 total += cached[1]
         return total
