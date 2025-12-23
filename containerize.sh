@@ -24,7 +24,7 @@ elif [[ "$1" == "run" ]]; then
 elif [[ "$1" = "uninstall" ]]; then
     docker image rm $IMAGE_NAME
 else
-    echo "Usage: ./sage.sh [build|run|uninstall]"
+    echo "Usage: ./containerize.sh [build|run|uninstall]"
     exit 1
 fi
 exit 0
