@@ -39,7 +39,6 @@ You can use non-local models with Local Sage if desired. If you set an API key, 
 
 ## Installation 💽
 Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.\
-Local Sage can also be ran in a container via Docker.
 
 ###### For `uv`, open your terminal and type:
 ```bash
@@ -62,41 +61,6 @@ Configuration is done entirely through interactive commands. You never have to t
 
 **Tip:** If you press `tab` while at the main prompt, you can access a command completer for easy command use.
 
-### Docker 🐋
-A bash script is available for Linux & Mac users for easy Dockerization! \
-Start by creating and setting a working directory, then...
-1) Clone the repo:
-```bash
-git clone https://github.com/Kyleg142/localsage
-```
-2) Build the image:
-```bash
-chmod u+x containerizer.sh
-./containerizer.sh build
-```
-3) Run the container (with default settings):
-```bash
-./containerizer.sh run
-```
-Or, to Dockerize Local Sage manually:
-```bash
-# Perform step 1 above, and then...
-# 2) Build the image
-docker image build -t python-localsage .
-
-# 3) Run the container, most arguments are customizable
-docker run -it --rm \     
-  --name localsage \ 
-  --network host \     # Set 'host' to your API endpoint IP
-  -e OPENAI_API_KEY \
-  -v /var/lib/LocalSage:/root/.local/share/LocalSage \
-  python-localsage
-```
-You can also use the included script to remove the installed image:
-```bash
-./containerizer.sh uninstall
-```
-
 ### Dependencies 🧰
 Local Sage is designed with minimal dependencies, keeping the download light and minimizing library bloat.
 - [Rich](https://github.com/Textualize/rich) - Used extensively throughout. Panels, live rendering, etc.
@@ -115,6 +79,66 @@ Your config file, session files, and error logs are stored in your user's data d
 | Linux: | ~/.local/share/LocalSage |
 | macOS: | ~/Library/Application Support/LocalSage |
 | Windows: | %localappdata%/LocalSage |
+
+## Docker 🐋
+This is a general guide for running Local Sage in a Docker container. The `docker` commands below are suggested templates, feel free to edit them as necessary.
+
+A bash script, `containerize.sh`, is available to Linux & macOS users for convenient dockerization. You may have to run it with elevated permissions.
+
+Start by creating and setting a working directory.
+
+**If you'd like to use the script, perform the following:**
+```bash
+# 1) Clone the repo:
+git clone https://github.com/Kyleg142/localsage
+
+# 2) Build the image:
+chmod u+x containerize.sh
+./containerize.sh build
+
+# 3) Run the container with sane defaults:
+./containerize.sh run
+```
+###### Or, if you run a non-containerized backend/API on the same machine:
+```bash
+./containerize.sh run local
+```
+The script stores persistent files in `/var/lib/LocalSage`.
+
+**Dockerizing Local Sage manually:**
+```bash
+# 1) Clone the repo:
+git clone https://github.com/Kyleg142/localsage
+
+# 2) Build the image
+docker image build -t python-localsage .
+
+# 3) Run the container
+docker run -it --rm \     
+  --name localsage \ 
+  -e OPENAI_API_KEY \
+  -v /home/<YourUsername>/.local/share/LocalSage:/root/.local/share/LocalSage \
+  python-localsage
+```
+###### For Windows users, here is the equivalent `docker run` command in PowerShell:
+```powershell
+docker run -it --rm `
+  --name localsage `
+  -e OPENAI_API_KEY `
+  -v "${env:LOCALAPPDATA}/LocalSage:/root/.local/share/LocalSage" `
+  python-localsage
+```
+### Notes on Networking
+You may have to add specific options to your `docker run` command if you are running a non-containerized backend/API on the same machine. `./containerize.sh run local` applies these options automatically. 
+
+**Local Linux**
+1) Add `--network host` to your `docker run` options to allow the container to reach services on localhost.
+2) Follow the [**Getting Started**](#getting-started-%EF%B8%8F) section above.
+
+**Local Windows/Mac**
+1) Add `--add-host=host.docker.internal:host-gateway` to your `docker run` options.
+2) Run the container, type `!profileadd` to create a new profile. Set the API endpoint to `http://host.docker.internal:8080/v1` when prompted.
+3) Ensure your API endpoint (llama.cpp, vllm, etc.) is listening on `0.0.0.0:8080`.
 
 ## Display Notes 🖥️
 Typing into the terminal while streaming is active may cause visual artifacting. Avoid typing into the terminal until the current generation finishes.
