@@ -164,7 +164,7 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 
 Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have to swap your API key with `!key`.
 
-## What is Next?
+## What's Next?
 Upcoming features, in order:
 - Accurate tk/s readout in the status panel.
 - Raw token consumption readout on file attachment.
