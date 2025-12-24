@@ -166,10 +166,6 @@ Local Sage will only ever store one API key in your keychain. If you switch prov
 
 ## What is Next?
 Upcoming features, in order:
-- In-line arguments/options for all commands. Commands are a bit clunky right now.
-  - Ex: `!a ~/Projects/project/file.txt` and `!switch profilename`
-- `!purge all` option to remove all attachments from the active session.
-- `!@` as an alternative to `!a` or `!attach`
 - Accurate tk/s readout in the status panel.
 - Raw token consumption readout on file attachment.
 - Full system prompt list feature, for storing and hot-swapping system prompts on demand.
