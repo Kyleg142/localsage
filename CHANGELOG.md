@@ -1,3 +1,19 @@
+### v1.3.0
+
+**Technical Improvements:**
+- Token counting and caching has been optimized. Long sessions consume less memory.
+
+**UX:**
+- New argument for !purge, `!purge all`. Can be used to delete all session attachments at once.
+- Profile commands are argument-based now: `!profile add`, `!profile switch`, `!profile list`, and `!profile remove`.
+
+**Architecture:**
+- General code cleanup and de-duplication.
+
+---
+
+
+
 ### v1.2.2
 
 **Dockerization!:** Local Sage can now be ran easily in Docker! Instructions are now posted at the front of the repo.
@@ -10,7 +26,7 @@
 
 **Architecture:** Decoupled chart spawning logic.
 
-**UX:** Re-implemented the !sessions and !attachments commands.
+**UX:** Re-implemented the `!sessions` and `!attachments` commands.
 
 ---
 
