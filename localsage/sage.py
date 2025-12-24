@@ -159,11 +159,13 @@ COMMAND_COMPLETER = WordCompleter(
         "!key",
         "!l",
         "!load",
-        "!profileadd",
-        "!profileremove",
-        "!profiles",
+        "!profile add",
+        "!profile list",
+        "!profile remove",
+        "!profile switch",
         "!prompt",
         "!purge",
+        "!purge all",
         "!q",
         "!quit",
         "!rate",
@@ -173,7 +175,6 @@ COMMAND_COMPLETER = WordCompleter(
         "!sessions",
         "!sum",
         "!summary",
-        "!switch",
         "!theme",
     ],
     match_middle=True,
@@ -410,8 +411,12 @@ class FileManager:
     def remove_attachment(self, target_name: str) -> str | None:
         """Removes an attachment by name."""
         attachments = self.get_attachments()
+        target = target_name.lower().strip()
         for index, kind, name in reversed(attachments):
-            if target_name.lower().strip() == name.lower():
+            if target == "all":
+                self.session.remove_history(index)
+                continue
+            if target == name.lower():
                 self.session.remove_history(index)
                 return kind  # For the UI to catch
         return None
@@ -546,10 +551,10 @@ class UIConstructor:
             textwrap.dedent("""
             | **Profile Management** | *Manage multiple models & API endpoints* |
             | --- | ----------- |
-            | `!profileadd` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
-            | `!profileremove` | Remove an existing profile. |
-            | `!profiles` | List configured profiles. |
-            | `!switch` | Switch between profiles. |
+            | `!profile add` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
+            | `!profile remove` | Remove an existing profile. |
+            | `!profile list` | List configured profiles. |
+            | `!profile switch` | Switch between profiles. |
 
             | **Configuration** | *Main configuration commands* |
             | --- | ----------- |
@@ -580,6 +585,7 @@ class UIConstructor:
             | `!a` or `!attach` | Attaches a file to the current session. |
             | `!attachments` | List all current attachments. |
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
+            | `!purge all` | Purges all attachments from the current session. |
             | | |
             | **FILE TYPES:** | All text-based file types are acceptable. |
             | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
@@ -667,6 +673,7 @@ class CLIController:
             "!attach": self.attach_file,
             "!attachments": self.list_attachments,
             "!purge": self.purge_attachment,
+            "!purge all": self.purge_all_attachments,
             "!consume": self.toggle_consume,
             "!sessions": self.list_sessions,
             "!delete": self.delete_session,
@@ -675,10 +682,10 @@ class CLIController:
             "!summary": self.summarize_session,
             "!config": self.spawn_settings_chart,
             "!clear": console.clear,
-            "!profiles": self.list_models,
-            "!profileadd": self.add_model,
-            "!profileremove": self.remove_model,
-            "!switch": self.switch_model,
+            "!profile list": self.list_models,
+            "!profile add": self.add_model,
+            "!profile remove": self.remove_model,
+            "!profile switch": self.switch_model,
             "!q": sys.exit,
             "!quit": sys.exit,
             "!ctx": self.set_context_length,
@@ -692,7 +699,7 @@ class CLIController:
 
     def handle_input(self, user_input: str) -> bool | None | OpenAI:
         """Parse user input for a command & handle it"""
-        cmd = user_input.split()[0].lower()
+        cmd = user_input.lower()
         if cmd in self.commands:
             if (
                 cmd in ("!q", "!quit", "!sum", "!summarize", "!l", "!load")
@@ -729,12 +736,13 @@ class CLIController:
     # <~~MAIN CONFIG~~>
     def set_system_prompt(self):
         """Sets a new persistent system prompt within the config file."""
-        sysprompt = self._prompt_wrapper(
-            HTML("Enter a system prompt<seagreen>:</seagreen> "), allow_empty=True
+        sysprompt = (
+            self._prompt_wrapper(
+                HTML("Enter a system prompt<seagreen>:</seagreen> "),
+                allow_empty=True,
+            )
+            or ""
         )
-        if sysprompt is None:
-            return
-
         self.config.system_prompt = sysprompt
         self.config.save()
         console.print(f"[green]System prompt updated to:[/green] {sysprompt}")
@@ -748,9 +756,8 @@ class CLIController:
         ctx = self._prompt_wrapper(
             HTML("Enter a max context length<seagreen>:</seagreen> ")
         )
-        if ctx is None:
+        if not ctx:
             return
-
         try:
             value = int(ctx)
             if value <= 0:
@@ -768,9 +775,8 @@ class CLIController:
     def set_api_key(self) -> OpenAI | None:
         """Allows the user to set an API key. SAFELY stores the user's API key with keyring"""
         new_key = self._prompt_wrapper(HTML("Enter an API key<seagreen>:</seagreen> "))
-        if new_key is None:
+        if not new_key:
             return
-
         try:
             # Try to store securely w/ keyring
             set_password("LocalSageAPI", USER_NAME, new_key)
@@ -785,9 +791,8 @@ class CLIController:
     def set_refresh_rate(self):
         """Set a new custom refresh rate"""
         rate = self._prompt_wrapper(HTML("Enter a refresh rate<seagreen>:</seagreen> "))
-        if rate is None:
+        if not rate:
             return
-
         try:
             value = int(rate)
             if value <= 3:
@@ -807,7 +812,7 @@ class CLIController:
         theme = self._prompt_wrapper(
             HTML("Enter a valid theme name<seagreen>:</seagreen> ")
         )
-        if theme is None:
+        if not theme:
             return
 
         self.config.rich_code_theme = theme.lower()
@@ -836,13 +841,14 @@ class CLIController:
     def add_model(self):
         """Interactively add a model profile."""
         alias = self._prompt_wrapper(HTML("Profile name<seagreen>:</seagreen> "))
-        if alias is None:
+        if not alias:
             return
         name = self._prompt_wrapper(HTML("Model name<seagreen>:</seagreen> "))
-        if name is None:
+        if not name:
             return
+        console.print("[yellow]Format:[/yellow] https://ipaddress:port/v1")
         endpoint = self._prompt_wrapper(HTML("API endpoint<seagreen>:</seagreen> "))
-        if endpoint is None:
+        if not endpoint:
             return
 
         if any(m["alias"] == alias for m in self.config.models):
@@ -863,8 +869,10 @@ class CLIController:
     def remove_model(self):
         """Remove a model profile by alias."""
         self.list_models()
-        alias = self._prompt_wrapper(HTML("Profile to remove<seagreen>:</seagreen> "))
-        if alias is None:
+        alias = self._prompt_wrapper(
+            HTML("Enter a profile name<seagreen>:</seagreen> ")
+        )
+        if not alias:
             return
 
         if alias == self.config.active_model:
@@ -879,15 +887,14 @@ class CLIController:
         else:
             console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
 
-    def switch_model(self, alias=None) -> tuple[OpenAI, str] | None:
+    def switch_model(self) -> tuple[OpenAI, str] | None:
         """Switch active model profile by alias."""
+        self.list_models()
+        alias = self._prompt_wrapper(
+            HTML("Enter a profile name<seagreen>:</seagreen> ")
+        )
         if not alias:
-            self.list_models()
-            alias = self._prompt_wrapper(
-                HTML("Enter a profile name<seagreen>:</seagreen> ")
-            )
-            if alias is None:
-                return
+            return
 
         match = next((m for m in self.config.models if m["alias"] == alias), None)
         if not match:
@@ -912,7 +919,7 @@ class CLIController:
             file_name = self.session.active_session
         else:
             file_name = self._prompt_wrapper(self.session_prompt)
-            if file_name is None:
+            if not file_name:
                 return
 
         file_path = self.session._json_helper(file_name)
@@ -928,14 +935,14 @@ class CLIController:
 
     def load_session(self):
         """Loads a session from a .json file"""
-        if not self._list_sessions():
+        if not self.list_sessions():
             return
         file_name = self._prompt_wrapper(
             self.session_prompt,
             completer=self.session._session_completer(),
             style=COMPLETER_STYLER,
         )
-        if file_name is None:
+        if not file_name:
             return
 
         file_path = self.session._json_helper(file_name)
@@ -961,14 +968,14 @@ class CLIController:
 
     def delete_session(self):
         """Session deleter. Also lists files for user friendliness."""
-        if not self._list_sessions():
+        if not self.list_sessions():
             return
         file_name = self._prompt_wrapper(
             self.session_prompt,
             completer=self.session._session_completer(),
             style=COMPLETER_STYLER,
         )
-        if file_name is None:
+        if not file_name:
             return
 
         file_path = self.session._json_helper(file_name)
@@ -1035,21 +1042,7 @@ class CLIController:
         for s in sessions:
             console.print(f"• {s}", highlight=False)
         console.print()
-
-    def _list_sessions(self) -> bool:
-        """Helper version"""
-        # Both will be merged eventually
-        sessions = self.session.find_sessions()
-
-        if not sessions:
-            console.print("[dim]No saved sessions found.[/dim]\n")
-            return False
-
-        console.print("[cyan]Available sessions:[/cyan]")
-        for s in sessions:
-            console.print(f"• {s}", highlight=False)
-        console.print()
-        return True
+        return 1
 
     # <~~FILE MANAGEMENT~~>
     def attach_file(self):
@@ -1062,7 +1055,7 @@ class CLIController:
             style=COMPLETER_STYLER,
             history=self.filepath_history,
         )
-        if path is None:
+        if not path:
             return
 
         # Normalize path input and check file size
@@ -1077,7 +1070,7 @@ class CLIController:
                 HTML("Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "),
                 allow_empty=True,
             )
-            if choice is None:
+            if not choice:
                 return
             if choice.lower() not in ("y", "yes"):
                 console.print("[dim]Attachment canceled.[/dim]\n")
@@ -1122,7 +1115,7 @@ class CLIController:
         choice = self._prompt_wrapper(
             HTML("Enter file name to remove<seagreen>:</seagreen> ")
         )
-        if choice is None:
+        if not choice:
             return
 
         # And purge the file from the session
@@ -1134,6 +1127,13 @@ class CLIController:
             self.panel.spawn_status_panel()
         else:
             console.print(f"[red]No match found for:[/red] '{choice}'\n")
+
+    def purge_all_attachments(self):
+        self.filemanager.remove_attachment("all")
+        console.print(
+            "[cyan]All attachments have been cleared from the current session."
+        )
+        self.panel.spawn_status_panel()
 
     # <~~PROMPT WRAPPER~~>
     def _prompt_wrapper(
