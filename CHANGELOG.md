@@ -2,17 +2,13 @@
 
 **Technical Improvements:**
 - Token counting and caching has been optimized. Long sessions consume less memory.
+- General code cleanup and de-duplication.
 
 **UX:**
 - New argument for !purge, `!purge all`. Can be used to delete all session attachments at once.
 - Profile commands are argument-based now: `!profile add`, `!profile switch`, `!profile list`, and `!profile remove`.
 
-**Architecture:**
-- General code cleanup and de-duplication.
-
 ---
-
-
 
 ### v1.2.2
 
