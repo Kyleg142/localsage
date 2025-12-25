@@ -265,6 +265,7 @@ class SessionManager:
         self.active_session: str = ""
         self.encoder = tiktoken.get_encoding("o200k_base")
         self.token_cache: list[tuple[int, int] | None] = []
+        self.gen_time: float = 0
 
     def save_to_disk(self, filepath: str):
         """Save the current session to disk"""
@@ -323,7 +324,7 @@ class SessionManager:
         sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
         return sorted(sessions)
 
-    def count_tokens(self) -> int:
+    def count_tokens(self) -> int | tuple[int, float]:
         """Counts and caches tokens."""
         # Ensure cache length matches history
         cache: list[tuple[int, int] | None] = self.token_cache
@@ -335,6 +336,7 @@ class SessionManager:
 
         # Count tokens, then cache and return the total token count
         total = 0
+        throughput = 0
         for i, msg in enumerate(self.history):
             raw_content = msg.get("content") or ""
             if isinstance(raw_content, list):
@@ -348,21 +350,28 @@ class SessionManager:
             if cached is None or cached[0] != text_hash:
                 try:
                     count = len(self.encoder.encode(text))
+                    throughput = count / self.gen_time
                 except Exception:
                     count = 0
                 cache[i] = (text_hash, count)
                 total += count
             else:
                 total += cached[1]
+        if throughput:
+            return total, throughput
         return total
 
     def count_turns(self) -> int:
+        """Calculates and returns the turn number"""
         return sum(1 for m in self.history if m["role"] == "user")
+
+    def turn_duration(self, start: float, end: float):
+        """Sets gen_time by subtraction of two timers."""
+        self.gen_time = end - start
 
     def _json_helper(self, file_name: str) -> str:
         """
-        JSON extension helper.
-
+        JSON extension helper.\n
         Used throughout most session management methods.
         """
         if not file_name.endswith(".json"):
@@ -493,9 +502,14 @@ class UIConstructor:
 
     def status_panel_constructor(self) -> Panel:
         turns = self.session.count_turns()
-        context_percentage = round(
-            (self.session.count_tokens() / self.config.context_length) * 100, 1
-        )
+        tokens = self.session.count_tokens()
+        throughput = 0
+        if isinstance(tokens, tuple):
+            context = tokens[0]
+            throughput = tokens[1]
+        else:
+            context = tokens
+        context_percentage = round((context / self.config.context_length) * 100, 1)
 
         # Colorize context percentage based on context consumption
         context_color: str = "dim"
@@ -512,6 +526,8 @@ class UIConstructor:
             (" | "),
             (f"Turn: {turns}"),
         )
+        if throughput:
+            status_text.append(f" | Tk/s: {throughput:.1f}")
         return Panel(
             status_text,
             border_style="dim",
@@ -1213,6 +1229,9 @@ class Chat:
         # Baseline timer for the rendering loop
         self.last_update_time: float = time.monotonic()
 
+        # Response start time, for calculating toks/sec in SessionManager
+        self.start_time: float = 0
+
         # Terminal height and panel scaling
         self.max_height: int = 0
         self.reasoning_limit: int = 0
@@ -1272,6 +1291,8 @@ class Chat:
                 self.spawn_reasoning_panel()
                 self.spawn_response_panel()
                 self.update_renderables()
+            end_time = time.perf_counter()
+            self.session.turn_duration(self.start_time, end_time)
             time.sleep(0.02)  # Small timeout before buffers are flushed
             self.buffer_flusher()
         # Ctrl + C interrupt support
@@ -1418,9 +1439,7 @@ class Chat:
     def spawn_reasoning_panel(self):
         """Manages the reasoning panel."""
         if self.state.reasoning is not None and not self.reasoning_panel_initialized:
-            # Reasoning panel constructor
             self.reasoning_panel = self.ui.reasoning_panel_constructor()
-            # Adds the reasoning panel to the live display
             self.renderables_to_display.append(self.reasoning_panel)
             self._rebuild_layout()
             self.reasoning_panel_initialized = True
@@ -1428,7 +1447,7 @@ class Chat:
     def spawn_response_panel(self):
         """Manages the response panel."""
         if self.state.response is not None and not self.response_panel_initialized:
-            # Response panel constructor
+            self.start_time = time.perf_counter()
             self.response_panel = self.ui.response_panel_constructor()
             # Adds the response panel to the live display, optionally consume the reasoning panel
             if (
