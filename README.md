@@ -52,8 +52,8 @@ Type **`localsage`** into your terminal to launch the CLI. Type **`!h`** to view
 
 ### Getting Started ✔️
 Configuration is done entirely through interactive commands. You never have to touch a config file.
-1. Configure a profile with `!profileadd`.
-2. Type `!switch` to switch to your new profile.
+1. Configure a profile with `!profile add`.
+2. Type `!profile switch` to switch to your new profile.
 3. Use `!ctx` to set your context length.
 4. (Optional) Set your own system prompt with `!prompt` or an API key with `!key`.
 
