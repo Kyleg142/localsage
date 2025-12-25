@@ -137,7 +137,7 @@ You may have to add specific options to your `docker run` command if you are run
 
 **Local Windows/Mac**
 1) Add `--add-host=host.docker.internal:host-gateway` to your `docker run` options.
-2) Run the container, type `!profileadd` to create a new profile. Set the API endpoint to `http://host.docker.internal:8080/v1` when prompted.
+2) Run the container, type `!profile add` to create a new profile. Set the API endpoint to `http://host.docker.internal:8080/v1` when prompted.
 3) Ensure your API endpoint (llama.cpp, vllm, etc.) is listening on `0.0.0.0:8080`.
 
 ## Display Notes 🖥️
