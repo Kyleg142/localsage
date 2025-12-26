@@ -348,11 +348,9 @@ class SessionManager:
             text_hash = hash(text)
             cached = cache[i]
             if cached is None or cached[0] != text_hash:
-                try:
-                    count = len(self.encoder.encode(text))
+                count = self.encode(text)
+                if self.gen_time:
                     throughput = count / self.gen_time
-                except Exception:
-                    count = 0
                 cache[i] = (text_hash, count)
                 total += count
             else:
@@ -368,6 +366,13 @@ class SessionManager:
     def turn_duration(self, start: float, end: float):
         """Sets gen_time by subtraction of two timers."""
         self.gen_time = end - start
+
+    def encode(self, text: str) -> int:
+        try:
+            count = len(self.encoder.encode(text))
+        except Exception:
+            count = 0
+        return count
 
     def _json_helper(self, file_name: str) -> str:
         """
@@ -394,7 +399,7 @@ class FileManager:
     def __init__(self, session: SessionManager):
         self.session: SessionManager = session
 
-    def process_file(self, path: str) -> bool:
+    def process_file(self, path: str) -> tuple[bool, int]:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -402,6 +407,7 @@ class FileManager:
             with open(path, "r", encoding="latin-1") as f:
                 content = f.read()
 
+        consumption = self.session.encode(content)
         content = content.replace("```", "ʼʼʼ")
         filename = os.path.basename(path)
         wrapped = f"---\nFile: `{filename}`\n```\n{content}\n```\n---"
@@ -415,14 +421,14 @@ class FileManager:
             is_update = True
         # Add the file's content to context, wrapped in Markdown for retrieval
         self.session.append_message("user", wrapped)
-        return is_update
+        return is_update, consumption
 
     def remove_attachment(self, target_name: str) -> str | None:
         """Removes an attachment by name."""
         attachments = self.get_attachments()
         target = target_name.lower().strip()
         for index, kind, name in reversed(attachments):
-            if target == "all":
+            if target == "[all]":
                 self.session.remove_history(index)
                 continue
             if target == name.lower():
@@ -500,7 +506,7 @@ class UIConstructor:
             style="default",
         )
 
-    def status_panel_constructor(self) -> Panel:
+    def status_panel_constructor(self, toks=True) -> Panel:
         turns = self.session.count_turns()
         tokens = self.session.count_tokens()
         throughput = 0
@@ -526,7 +532,7 @@ class UIConstructor:
             (" | "),
             (f"Turn: {turns}"),
         )
-        if throughput:
+        if throughput and toks:
             status_text.append(f" | Tk/s: {throughput:.1f}")
         return Panel(
             status_text,
@@ -645,10 +651,10 @@ class GlobalPanels:
         console.print(Markdown("Type `!h` for a list of commands."))
         console.print()
 
-    def spawn_status_panel(self):
+    def spawn_status_panel(self, toks=True):
         """Prints a status panel."""
         # Status panel constructor
-        console.print(self.ui.status_panel_constructor())
+        console.print(self.ui.status_panel_constructor(toks))
         console.print()
 
     def spawn_error_panel(self, error: str, exception: str):
@@ -969,7 +975,7 @@ class CLIController:
                 self.interface.reset_turn_state()
                 self.interface.render_history()
             console.print(f"[green]Session loaded from:[/green] {file_path}")
-            self.panel.spawn_status_panel()
+            self.panel.spawn_status_panel(toks=False)
         except FileNotFoundError:
             console.print(f"[red]No session file found:[/red] {file_path}\n")
             return
@@ -1014,7 +1020,7 @@ class CLIController:
         # Start a new conversation history list with the system prompt
         self.session.reset()
         console.print("[green]The current session has been reset successfully.[/green]")
-        self.panel.spawn_status_panel()
+        self.panel.spawn_status_panel(toks=False)
 
     def summarize_session(self):
         """Sets up and triggers summarization"""
@@ -1093,13 +1099,19 @@ class CLIController:
                 return
 
         try:
-            is_update = self.filemanager.process_file(path)
+            file = self.filemanager.process_file(path)
+            is_update = file[0]
             filename = os.path.basename(path)
+            consumption = (file[1] / self.config.context_length) * 100
             if is_update:
-                console.print(f"{filename} [green]has been updated in context.[/green]")
+                console.print(
+                    f"{filename} [green]updated successfully.[/green]\n[yellow]Context size:[/yellow] {file[1]}, {consumption:.1f}%"
+                )
             else:
-                console.print(f"{filename} [green]read and added to context.[/green]")
-            self.panel.spawn_status_panel()
+                console.print(
+                    f"{filename} [green]attached successfully.[/green]\n[yellow]Context size:[/yellow] {file[1]}, {consumption:.1f}%"
+                )
+            self.panel.spawn_status_panel(toks=False)
         except Exception as e:
             log_exception(e, "Error in process_file()")
             self.panel.spawn_error_panel("ERROR READING FILE", f"{e}")
@@ -1140,16 +1152,14 @@ class CLIController:
             console.print(
                 f"[green]{removed_file.capitalize()}[/green] '{choice}' [green]removed.[/green]"
             )
-            self.panel.spawn_status_panel()
+            self.panel.spawn_status_panel(toks=False)
         else:
             console.print(f"[red]No match found for:[/red] '{choice}'\n")
 
     def purge_all_attachments(self):
-        self.filemanager.remove_attachment("all")
-        console.print(
-            "[cyan]All attachments have been cleared from the current session."
-        )
-        self.panel.spawn_status_panel()
+        self.filemanager.remove_attachment("[all]")
+        console.print("[cyan]All attachments removed.")
+        self.panel.spawn_status_panel(toks=False)
 
     # <~~PROMPT WRAPPER~~>
     def _prompt_wrapper(
