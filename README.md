@@ -52,8 +52,8 @@ Type **`localsage`** into your terminal to launch the CLI. Type **`!h`** to view
 
 ### Getting Started ✔️
 Configuration is done entirely through interactive commands. You never have to touch a config file.
-1. Configure a profile with `!profileadd`.
-2. Type `!switch` to switch to your new profile.
+1. Configure a profile with `!profile add`.
+2. Type `!profile switch` to switch to your new profile.
 3. Use `!ctx` to set your context length.
 4. (Optional) Set your own system prompt with `!prompt` or an API key with `!key`.
 
@@ -137,7 +137,7 @@ You may have to add specific options to your `docker run` command if you are run
 
 **Local Windows/Mac**
 1) Add `--add-host=host.docker.internal:host-gateway` to your `docker run` options.
-2) Run the container, type `!profileadd` to create a new profile. Set the API endpoint to `http://host.docker.internal:8080/v1` when prompted.
+2) Run the container, type `!profile add` to create a new profile. Set the API endpoint to `http://host.docker.internal:8080/v1` when prompted.
 3) Ensure your API endpoint (llama.cpp, vllm, etc.) is listening on `0.0.0.0:8080`.
 
 ## Display Notes 🖥️
@@ -164,15 +164,9 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 
 Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have to swap your API key with `!key`.
 
-## What is Next?
+## What's Next?
 Upcoming features, in order:
-- In-line arguments/options for all commands. Commands are a bit clunky right now.
-  - Ex: `!a ~/Projects/project/file.txt` and `!switch profilename`
-- `!purge all` option to remove all attachments from the active session.
-- `!@` as an alternative to `!a` or `!attach`
-- Accurate tk/s readout in the status panel.
-- Raw token consumption readout on file attachment.
-- Full system prompt list feature, for storing and hot-swapping system prompts on demand.
+- System prompt list feature, for storing and swapping system prompts.
 
 ## Versioning 🔧
 The project follows basic versioning:

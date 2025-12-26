@@ -159,11 +159,13 @@ COMMAND_COMPLETER = WordCompleter(
         "!key",
         "!l",
         "!load",
-        "!profileadd",
-        "!profileremove",
-        "!profiles",
+        "!profile add",
+        "!profile list",
+        "!profile remove",
+        "!profile switch",
         "!prompt",
         "!purge",
+        "!purge all",
         "!q",
         "!quit",
         "!rate",
@@ -173,7 +175,6 @@ COMMAND_COMPLETER = WordCompleter(
         "!sessions",
         "!sum",
         "!summary",
-        "!switch",
         "!theme",
     ],
     match_middle=True,
@@ -264,6 +265,7 @@ class SessionManager:
         self.active_session: str = ""
         self.encoder = tiktoken.get_encoding("o200k_base")
         self.token_cache: list[tuple[int, int] | None] = []
+        self.gen_time: float = 0
 
     def save_to_disk(self, filepath: str):
         """Save the current session to disk"""
@@ -322,7 +324,7 @@ class SessionManager:
         sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
         return sorted(sessions)
 
-    def count_tokens(self) -> int:
+    def count_tokens(self) -> int | tuple[int, float]:
         """Counts and caches tokens."""
         # Ensure cache length matches history
         cache: list[tuple[int, int] | None] = self.token_cache
@@ -334,6 +336,7 @@ class SessionManager:
 
         # Count tokens, then cache and return the total token count
         total = 0
+        throughput = 0
         for i, msg in enumerate(self.history):
             raw_content = msg.get("content") or ""
             if isinstance(raw_content, list):
@@ -345,23 +348,35 @@ class SessionManager:
             text_hash = hash(text)
             cached = cache[i]
             if cached is None or cached[0] != text_hash:
-                try:
-                    count = len(self.encoder.encode(text))
-                except Exception:
-                    count = 0
+                count = self.encode(text)
+                if self.gen_time:
+                    throughput = count / self.gen_time
                 cache[i] = (text_hash, count)
                 total += count
             else:
                 total += cached[1]
+        if throughput:
+            return total, throughput
         return total
 
     def count_turns(self) -> int:
+        """Calculates and returns the turn number"""
         return sum(1 for m in self.history if m["role"] == "user")
+
+    def turn_duration(self, start: float, end: float):
+        """Sets gen_time by subtraction of two timers."""
+        self.gen_time = end - start
+
+    def encode(self, text: str) -> int:
+        try:
+            count = len(self.encoder.encode(text))
+        except Exception:
+            count = 0
+        return count
 
     def _json_helper(self, file_name: str) -> str:
         """
-        JSON extension helper.
-
+        JSON extension helper.\n
         Used throughout most session management methods.
         """
         if not file_name.endswith(".json"):
@@ -384,7 +399,7 @@ class FileManager:
     def __init__(self, session: SessionManager):
         self.session: SessionManager = session
 
-    def process_file(self, path: str) -> bool:
+    def process_file(self, path: str) -> tuple[bool, int]:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -392,6 +407,7 @@ class FileManager:
             with open(path, "r", encoding="latin-1") as f:
                 content = f.read()
 
+        consumption = self.session.encode(content)
         content = content.replace("```", "ʼʼʼ")
         filename = os.path.basename(path)
         wrapped = f"---\nFile: `{filename}`\n```\n{content}\n```\n---"
@@ -405,13 +421,17 @@ class FileManager:
             is_update = True
         # Add the file's content to context, wrapped in Markdown for retrieval
         self.session.append_message("user", wrapped)
-        return is_update
+        return is_update, consumption
 
     def remove_attachment(self, target_name: str) -> str | None:
         """Removes an attachment by name."""
         attachments = self.get_attachments()
+        target = target_name.lower().strip()
         for index, kind, name in reversed(attachments):
-            if target_name.lower().strip() == name.lower():
+            if target == "[all]":
+                self.session.remove_history(index)
+                continue
+            if target == name.lower():
                 self.session.remove_history(index)
                 return kind  # For the UI to catch
         return None
@@ -486,11 +506,16 @@ class UIConstructor:
             style="default",
         )
 
-    def status_panel_constructor(self) -> Panel:
+    def status_panel_constructor(self, toks=True) -> Panel:
         turns = self.session.count_turns()
-        context_percentage = round(
-            (self.session.count_tokens() / self.config.context_length) * 100, 1
-        )
+        tokens = self.session.count_tokens()
+        throughput = 0
+        if isinstance(tokens, tuple):
+            context = tokens[0]
+            throughput = tokens[1]
+        else:
+            context = tokens
+        context_percentage = round((context / self.config.context_length) * 100, 1)
 
         # Colorize context percentage based on context consumption
         context_color: str = "dim"
@@ -507,6 +532,8 @@ class UIConstructor:
             (" | "),
             (f"Turn: {turns}"),
         )
+        if throughput and toks:
+            status_text.append(f" | Tk/s: {throughput:.1f}")
         return Panel(
             status_text,
             border_style="dim",
@@ -546,10 +573,10 @@ class UIConstructor:
             textwrap.dedent("""
             | **Profile Management** | *Manage multiple models & API endpoints* |
             | --- | ----------- |
-            | `!profileadd` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
-            | `!profileremove` | Remove an existing profile. |
-            | `!profiles` | List configured profiles. |
-            | `!switch` | Switch between profiles. |
+            | `!profile add` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
+            | `!profile remove` | Remove an existing profile. |
+            | `!profile list` | List configured profiles. |
+            | `!profile switch` | Switch between profiles. |
 
             | **Configuration** | *Main configuration commands* |
             | --- | ----------- |
@@ -580,6 +607,7 @@ class UIConstructor:
             | `!a` or `!attach` | Attaches a file to the current session. |
             | `!attachments` | List all current attachments. |
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
+            | `!purge all` | Purges all attachments from the current session. |
             | | |
             | **FILE TYPES:** | All text-based file types are acceptable. |
             | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
@@ -623,10 +651,10 @@ class GlobalPanels:
         console.print(Markdown("Type `!h` for a list of commands."))
         console.print()
 
-    def spawn_status_panel(self):
+    def spawn_status_panel(self, toks=True):
         """Prints a status panel."""
         # Status panel constructor
-        console.print(self.ui.status_panel_constructor())
+        console.print(self.ui.status_panel_constructor(toks))
         console.print()
 
     def spawn_error_panel(self, error: str, exception: str):
@@ -667,6 +695,7 @@ class CLIController:
             "!attach": self.attach_file,
             "!attachments": self.list_attachments,
             "!purge": self.purge_attachment,
+            "!purge all": self.purge_all_attachments,
             "!consume": self.toggle_consume,
             "!sessions": self.list_sessions,
             "!delete": self.delete_session,
@@ -675,10 +704,10 @@ class CLIController:
             "!summary": self.summarize_session,
             "!config": self.spawn_settings_chart,
             "!clear": console.clear,
-            "!profiles": self.list_models,
-            "!profileadd": self.add_model,
-            "!profileremove": self.remove_model,
-            "!switch": self.switch_model,
+            "!profile list": self.list_models,
+            "!profile add": self.add_model,
+            "!profile remove": self.remove_model,
+            "!profile switch": self.switch_model,
             "!q": sys.exit,
             "!quit": sys.exit,
             "!ctx": self.set_context_length,
@@ -692,7 +721,7 @@ class CLIController:
 
     def handle_input(self, user_input: str) -> bool | None | OpenAI:
         """Parse user input for a command & handle it"""
-        cmd = user_input.split()[0].lower()
+        cmd = user_input.lower()
         if cmd in self.commands:
             if (
                 cmd in ("!q", "!quit", "!sum", "!summarize", "!l", "!load")
@@ -729,12 +758,13 @@ class CLIController:
     # <~~MAIN CONFIG~~>
     def set_system_prompt(self):
         """Sets a new persistent system prompt within the config file."""
-        sysprompt = self._prompt_wrapper(
-            HTML("Enter a system prompt<seagreen>:</seagreen> "), allow_empty=True
+        sysprompt = (
+            self._prompt_wrapper(
+                HTML("Enter a system prompt<seagreen>:</seagreen> "),
+                allow_empty=True,
+            )
+            or ""
         )
-        if sysprompt is None:
-            return
-
         self.config.system_prompt = sysprompt
         self.config.save()
         console.print(f"[green]System prompt updated to:[/green] {sysprompt}")
@@ -748,9 +778,8 @@ class CLIController:
         ctx = self._prompt_wrapper(
             HTML("Enter a max context length<seagreen>:</seagreen> ")
         )
-        if ctx is None:
+        if not ctx:
             return
-
         try:
             value = int(ctx)
             if value <= 0:
@@ -768,9 +797,8 @@ class CLIController:
     def set_api_key(self) -> OpenAI | None:
         """Allows the user to set an API key. SAFELY stores the user's API key with keyring"""
         new_key = self._prompt_wrapper(HTML("Enter an API key<seagreen>:</seagreen> "))
-        if new_key is None:
+        if not new_key:
             return
-
         try:
             # Try to store securely w/ keyring
             set_password("LocalSageAPI", USER_NAME, new_key)
@@ -785,9 +813,8 @@ class CLIController:
     def set_refresh_rate(self):
         """Set a new custom refresh rate"""
         rate = self._prompt_wrapper(HTML("Enter a refresh rate<seagreen>:</seagreen> "))
-        if rate is None:
+        if not rate:
             return
-
         try:
             value = int(rate)
             if value <= 3:
@@ -807,7 +834,7 @@ class CLIController:
         theme = self._prompt_wrapper(
             HTML("Enter a valid theme name<seagreen>:</seagreen> ")
         )
-        if theme is None:
+        if not theme:
             return
 
         self.config.rich_code_theme = theme.lower()
@@ -836,13 +863,14 @@ class CLIController:
     def add_model(self):
         """Interactively add a model profile."""
         alias = self._prompt_wrapper(HTML("Profile name<seagreen>:</seagreen> "))
-        if alias is None:
+        if not alias:
             return
         name = self._prompt_wrapper(HTML("Model name<seagreen>:</seagreen> "))
-        if name is None:
+        if not name:
             return
+        console.print("[yellow]Format:[/yellow] https://ipaddress:port/v1")
         endpoint = self._prompt_wrapper(HTML("API endpoint<seagreen>:</seagreen> "))
-        if endpoint is None:
+        if not endpoint:
             return
 
         if any(m["alias"] == alias for m in self.config.models):
@@ -863,8 +891,10 @@ class CLIController:
     def remove_model(self):
         """Remove a model profile by alias."""
         self.list_models()
-        alias = self._prompt_wrapper(HTML("Profile to remove<seagreen>:</seagreen> "))
-        if alias is None:
+        alias = self._prompt_wrapper(
+            HTML("Enter a profile name<seagreen>:</seagreen> ")
+        )
+        if not alias:
             return
 
         if alias == self.config.active_model:
@@ -879,15 +909,14 @@ class CLIController:
         else:
             console.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
 
-    def switch_model(self, alias=None) -> tuple[OpenAI, str] | None:
+    def switch_model(self) -> tuple[OpenAI, str] | None:
         """Switch active model profile by alias."""
+        self.list_models()
+        alias = self._prompt_wrapper(
+            HTML("Enter a profile name<seagreen>:</seagreen> ")
+        )
         if not alias:
-            self.list_models()
-            alias = self._prompt_wrapper(
-                HTML("Enter a profile name<seagreen>:</seagreen> ")
-            )
-            if alias is None:
-                return
+            return
 
         match = next((m for m in self.config.models if m["alias"] == alias), None)
         if not match:
@@ -912,7 +941,7 @@ class CLIController:
             file_name = self.session.active_session
         else:
             file_name = self._prompt_wrapper(self.session_prompt)
-            if file_name is None:
+            if not file_name:
                 return
 
         file_path = self.session._json_helper(file_name)
@@ -928,14 +957,14 @@ class CLIController:
 
     def load_session(self):
         """Loads a session from a .json file"""
-        if not self._list_sessions():
+        if not self.list_sessions():
             return
         file_name = self._prompt_wrapper(
             self.session_prompt,
             completer=self.session._session_completer(),
             style=COMPLETER_STYLER,
         )
-        if file_name is None:
+        if not file_name:
             return
 
         file_path = self.session._json_helper(file_name)
@@ -946,7 +975,7 @@ class CLIController:
                 self.interface.reset_turn_state()
                 self.interface.render_history()
             console.print(f"[green]Session loaded from:[/green] {file_path}")
-            self.panel.spawn_status_panel()
+            self.panel.spawn_status_panel(toks=False)
         except FileNotFoundError:
             console.print(f"[red]No session file found:[/red] {file_path}\n")
             return
@@ -961,14 +990,14 @@ class CLIController:
 
     def delete_session(self):
         """Session deleter. Also lists files for user friendliness."""
-        if not self._list_sessions():
+        if not self.list_sessions():
             return
         file_name = self._prompt_wrapper(
             self.session_prompt,
             completer=self.session._session_completer(),
             style=COMPLETER_STYLER,
         )
-        if file_name is None:
+        if not file_name:
             return
 
         file_path = self.session._json_helper(file_name)
@@ -991,7 +1020,7 @@ class CLIController:
         # Start a new conversation history list with the system prompt
         self.session.reset()
         console.print("[green]The current session has been reset successfully.[/green]")
-        self.panel.spawn_status_panel()
+        self.panel.spawn_status_panel(toks=False)
 
     def summarize_session(self):
         """Sets up and triggers summarization"""
@@ -1035,21 +1064,7 @@ class CLIController:
         for s in sessions:
             console.print(f"• {s}", highlight=False)
         console.print()
-
-    def _list_sessions(self) -> bool:
-        """Helper version"""
-        # Both will be merged eventually
-        sessions = self.session.find_sessions()
-
-        if not sessions:
-            console.print("[dim]No saved sessions found.[/dim]\n")
-            return False
-
-        console.print("[cyan]Available sessions:[/cyan]")
-        for s in sessions:
-            console.print(f"• {s}", highlight=False)
-        console.print()
-        return True
+        return 1
 
     # <~~FILE MANAGEMENT~~>
     def attach_file(self):
@@ -1062,7 +1077,7 @@ class CLIController:
             style=COMPLETER_STYLER,
             history=self.filepath_history,
         )
-        if path is None:
+        if not path:
             return
 
         # Normalize path input and check file size
@@ -1077,20 +1092,26 @@ class CLIController:
                 HTML("Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "),
                 allow_empty=True,
             )
-            if choice is None:
+            if not choice:
                 return
             if choice.lower() not in ("y", "yes"):
                 console.print("[dim]Attachment canceled.[/dim]\n")
                 return
 
         try:
-            is_update = self.filemanager.process_file(path)
+            file = self.filemanager.process_file(path)
+            is_update = file[0]
             filename = os.path.basename(path)
+            consumption = (file[1] / self.config.context_length) * 100
             if is_update:
-                console.print(f"{filename} [green]has been updated in context.[/green]")
+                console.print(
+                    f"{filename} [green]updated successfully.[/green]\n[yellow]Context size:[/yellow] {file[1]}, {consumption:.1f}%"
+                )
             else:
-                console.print(f"{filename} [green]read and added to context.[/green]")
-            self.panel.spawn_status_panel()
+                console.print(
+                    f"{filename} [green]attached successfully.[/green]\n[yellow]Context size:[/yellow] {file[1]}, {consumption:.1f}%"
+                )
+            self.panel.spawn_status_panel(toks=False)
         except Exception as e:
             log_exception(e, "Error in process_file()")
             self.panel.spawn_error_panel("ERROR READING FILE", f"{e}")
@@ -1122,7 +1143,7 @@ class CLIController:
         choice = self._prompt_wrapper(
             HTML("Enter file name to remove<seagreen>:</seagreen> ")
         )
-        if choice is None:
+        if not choice:
             return
 
         # And purge the file from the session
@@ -1131,9 +1152,14 @@ class CLIController:
             console.print(
                 f"[green]{removed_file.capitalize()}[/green] '{choice}' [green]removed.[/green]"
             )
-            self.panel.spawn_status_panel()
+            self.panel.spawn_status_panel(toks=False)
         else:
             console.print(f"[red]No match found for:[/red] '{choice}'\n")
+
+    def purge_all_attachments(self):
+        self.filemanager.remove_attachment("[all]")
+        console.print("[cyan]All attachments removed.")
+        self.panel.spawn_status_panel(toks=False)
 
     # <~~PROMPT WRAPPER~~>
     def _prompt_wrapper(
@@ -1213,6 +1239,9 @@ class Chat:
         # Baseline timer for the rendering loop
         self.last_update_time: float = time.monotonic()
 
+        # Response start time, for calculating toks/sec in SessionManager
+        self.start_time: float = 0
+
         # Terminal height and panel scaling
         self.max_height: int = 0
         self.reasoning_limit: int = 0
@@ -1272,6 +1301,8 @@ class Chat:
                 self.spawn_reasoning_panel()
                 self.spawn_response_panel()
                 self.update_renderables()
+            end_time = time.perf_counter()
+            self.session.turn_duration(self.start_time, end_time)
             time.sleep(0.02)  # Small timeout before buffers are flushed
             self.buffer_flusher()
         # Ctrl + C interrupt support
@@ -1418,9 +1449,7 @@ class Chat:
     def spawn_reasoning_panel(self):
         """Manages the reasoning panel."""
         if self.state.reasoning is not None and not self.reasoning_panel_initialized:
-            # Reasoning panel constructor
             self.reasoning_panel = self.ui.reasoning_panel_constructor()
-            # Adds the reasoning panel to the live display
             self.renderables_to_display.append(self.reasoning_panel)
             self._rebuild_layout()
             self.reasoning_panel_initialized = True
@@ -1428,7 +1457,7 @@ class Chat:
     def spawn_response_panel(self):
         """Manages the response panel."""
         if self.state.response is not None and not self.response_panel_initialized:
-            # Response panel constructor
+            self.start_time = time.perf_counter()
             self.response_panel = self.ui.response_panel_constructor()
             # Adds the response panel to the live display, optionally consume the reasoning panel
             if (
