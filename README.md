@@ -166,9 +166,7 @@ Local Sage will only ever store one API key in your keychain. If you switch prov
 
 ## What's Next?
 Upcoming features, in order:
-- Accurate tk/s readout in the status panel.
-- Raw token consumption readout on file attachment.
-- Full system prompt list feature, for storing and hot-swapping system prompts on demand.
+- System prompt list feature, for storing and swapping system prompts.
 
 ## Versioning 🔧
 The project follows basic versioning:

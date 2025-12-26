@@ -1,11 +1,15 @@
 ### v1.3.0
 
+**New:**
+- Tokens-per-second throughput is now implemented in the status panel.
+- New option for !purge, `!purge all`. Used to delete all file attachments from a session.
+- Attaching a file now prints the file's size in raw tokens as well as percentage context consumption.
+
 **Technical Improvements:**
 - Token counting and caching has been optimized. Long sessions consume less memory.
 - General code cleanup and de-duplication.
 
 **UX:**
-- New argument for !purge, `!purge all`. Can be used to delete all session attachments at once.
 - Profile commands are argument-based now: `!profile add`, `!profile switch`, `!profile list`, and `!profile remove`.
 
 ---
