@@ -1,3 +1,15 @@
+### V1.3.1
+
+**UX:** Entering an incorrect command no longer triggers a model response.
+
+**Technical Improvements:**
+- **Architecture:**
+  - Separated the API interaction in `sage.py` into its own class, rightfully named API.
+  - Organized class structure in `sage.py` for maintainability.
+- New docstring for `sage.py`, serving as a concise architectural overview.
+
+---
+
 ### v1.3.0
 
 **New:**
