@@ -4,6 +4,44 @@
 #  LOCAL SAGE
 # <~~~~~~~~~~>
 
+# Welcome! This file contains all of the functional goodness for Local Sage.
+# All code is quality-checked for pythonic standards with basedpyright and ruff.
+# You can get an idea of the architecture in the docstring below.
+
+"""
+ABOUT:
+
+    Local Sage is a specialized interactive CLI known as a stateful REPL.
+    The idea is to achieve the functionality of a chat TUI without the overhead.
+
+REPL FLOW:
+
+       ↗ API → Render ↘
+    Input             Input
+       ↘ CLI → Result ↗
+
+CLASSES:
+
+    - Config:         User-facing configuration
+    - SessionManager: Session I/O
+    - FileManager:    Attachment I/O
+    - UIConstructor:  Interface object builder
+    - GlobalPanels:   Panel spawner
+    - CLIController:  Command logic
+    - API:            API interaction
+    - Turnstate:      State-of-truth
+    - Chat:           Rendering
+
+LIBRARIES:
+
+    - openai:         API interaction & history list
+    - tiktoken:       Tokenization
+    - rich:           Live rendering & visuals
+    - prompt_toolkit: Interactive prompts
+    - platformdirs:   OS-independent directories
+    - keyring:        Safe API key storage
+"""
+
 import getpass
 import json
 import logging
@@ -58,7 +96,6 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 USER_NAME = getpass.getuser()
 
 
-# Logger setup
 def init_logger():
     """Initializes the logging system."""
     date_str = datetime.now().strftime("%Y%m%d")
@@ -77,7 +114,7 @@ def init_logger():
 
 
 def log_exception(e: Exception, context: str = ""):
-    """Creates a full, formatted traceback string and writes it to a log file"""
+    """Creates a full formatted traceback string and writes it to a log file"""
     import traceback
 
     # Format the traceback (exception class, exception instance, traceback object)
@@ -87,7 +124,6 @@ def log_exception(e: Exception, context: str = ""):
     logging.error(msg)
 
 
-# Keyring safety net
 def setup_keyring_backend():
     """Safely detects a keyring backend."""
     try:
@@ -101,8 +137,7 @@ def setup_keyring_backend():
 
 def retrieve_key() -> str:
     """
-    Attempts to retrieve a stored API key
-
+    Attempts to retrieve a stored API key.\n
     Prio: OPENAI_API_KEY env variable -> OS keyring entry -> Dummy key
     """
     api_key = ""
@@ -120,9 +155,7 @@ def retrieve_key() -> str:
     return api_key
 
 
-# Spinner
 def spinner_constructor(content: str) -> Spinner:
-    # Needs to be a function, so it can be used in main() and Chat.stream_response
     return Spinner(
         "moon",
         text=f"[bold medium_orchid]{content}[/bold medium_orchid]",
@@ -195,7 +228,6 @@ class Config:
     """User-facing configuration variables"""
 
     def __init__(self):
-        """Initialization for configurable variables."""
         self.models: list[dict] = [
             {
                 "alias": "default",
@@ -204,6 +236,7 @@ class Config:
                 "api_key": "stored",
             }
         ]
+        # Default values
         self.active_model: str = "default"
         self.context_length: int = 131072
         self.refresh_rate: int = 30
@@ -248,14 +281,9 @@ class Config:
         return self.active()["alias"]
 
 
-# <~~SESSION STATE~~>
+# <~~SESSION I/O~~>
 class SessionManager:
-    """
-    Handles session management
-    - Session-related I/O
-    - Session history
-    - Session tokenization
-    """
+    """Handles session-related I/O"""
 
     def __init__(self, config: Config):
         self.config: Config = config
@@ -266,6 +294,21 @@ class SessionManager:
         self.encoder = tiktoken.get_encoding("o200k_base")
         self.token_cache: list[tuple[int, int] | None] = []
         self.gen_time: float = 0
+
+    def _json_helper(self, file_name: str) -> str:
+        """JSON extension helper"""
+        if not file_name.endswith(".json"):
+            file_name += ".json"
+        file_path = os.path.join(SESSIONS_DIR, file_name)
+        return file_path
+
+    def _session_completer(self) -> WordCompleter:
+        """Session completion helper for the session manager"""
+        return WordCompleter(
+            [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")],
+            ignore_case=True,
+            sentence=True,
+        )
 
     def save_to_disk(self, filepath: str):
         """Save the current session to disk"""
@@ -368,38 +411,29 @@ class SessionManager:
         self.gen_time = end - start
 
     def encode(self, text: str) -> int:
+        """Converts a string to tokens"""
         try:
             count = len(self.encoder.encode(text))
         except Exception:
             count = 0
         return count
 
-    def _json_helper(self, file_name: str) -> str:
-        """
-        JSON extension helper.\n
-        Used throughout most session management methods.
-        """
-        if not file_name.endswith(".json"):
-            file_name += ".json"
-        file_path = os.path.join(SESSIONS_DIR, file_name)
-        return file_path
 
-    def _session_completer(self) -> WordCompleter:
-        """Session completion helper for the session manager"""
-        return WordCompleter(
-            [f for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")],
-            ignore_case=True,
-            sentence=True,
-        )
-
-
+# <~~FILE I/O~~>
 class FileManager:
-    """Handles file management (I/O)"""
+    """Handles attachment-related I/O"""
 
     def __init__(self, session: SessionManager):
         self.session: SessionManager = session
 
+    def _file_validator(self, text: str) -> bool:
+        """File validation helper for file_validator()"""
+        # Boiled down to two lines, simply validates that a file exists
+        text = os.path.abspath(os.path.expanduser(text))
+        return os.path.isfile(text)
+
     def process_file(self, path: str) -> tuple[bool, int]:
+        """Processes a file for attachment"""
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -450,17 +484,12 @@ class FileManager:
         return attachments
 
     def file_validator(self) -> Validator:
+        """Prompt_toolkit file validator"""
         return Validator.from_callable(
             self._file_validator,
             error_message="File does not exist.",
             move_cursor_to_end=True,
         )
-
-    def _file_validator(self, text: str) -> bool:
-        """File validation helper for prompt_toolkit"""
-        # Boiled down to two lines, simply validates that a file exists
-        text = os.path.abspath(os.path.expanduser(text))
-        return os.path.isfile(text)
 
 
 # <~~USER INTERFACE~~~>
@@ -504,6 +533,18 @@ class UIConstructor:
             title_align="left",
             border_style="blue",
             style="default",
+        )
+
+    def assistant_panel_constructor(self, content: str) -> Panel:
+        return Panel(
+            Markdown(sanitize_math_safe(content)),
+            title=Text("💬 Response", style="bold green"),
+            title_align="left",
+            border_style="green",
+            style="default",
+            width=None,
+            box=box.HORIZONTALS,
+            padding=(0, 0),
         )
 
     def status_panel_constructor(self, toks=True) -> Panel:
@@ -662,6 +703,16 @@ class GlobalPanels:
         console.print(self.ui.error_panel_constructor(error, exception))
         console.print()
 
+    def spawn_user_panel(self, content: str):
+        """Spawns the user panel."""
+        console.print()
+        console.print(self.ui.user_panel_constructor(content))
+        console.print()
+
+    def spawn_assistant_panel(self, content: str):
+        """Spawns the Response panel - for a scrollable history."""
+        console.print(self.ui.assistant_panel_constructor(content))
+
 
 # <~~COMMANDS~~>
 class CLIController:
@@ -718,6 +769,36 @@ class CLIController:
         }
 
         self.session_prompt = HTML("Enter a session name<seagreen>:</seagreen> ")
+
+    # <~~HELPERS~~>
+    def _prompt_wrapper(
+        self, prefix, cancel_msg="Canceled.", allow_empty=False, **kwargs
+    ) -> str | None:
+        """Prompt_toolkit wrapper for validating input."""
+        try:
+            # **kwargs passes completers, styles, history, etc automatically
+            user_input = prompt(prefix, **kwargs)
+            stripped = user_input.strip()
+            if not stripped and not allow_empty:
+                console.print("[dim]No input detected.[/dim]\n")
+                return None
+            return stripped
+        except (KeyboardInterrupt, EOFError):
+            console.print(f"[dim]{cancel_msg}[/dim]\n")
+            return None
+
+    def _handle_summary_completion(self, summary_text: str):
+        """Callback executed by Chat after streaming finishes successfully."""
+        # Reset session, apply summary
+        self.session.reset_with_summary(summary_text)
+
+        # Clean up the turn state in Chat
+        if self.interface:
+            self.interface.reset_turn_state()
+            self.session.active_session = ""
+
+        console.print("[green]Summarization complete! New session primed.[/green]")
+        self.panel.spawn_status_panel()
 
     def handle_input(self, user_input: str) -> bool | None | OpenAI:
         """Parse user input for a command & handle it"""
@@ -1039,19 +1120,6 @@ class CLIController:
         # Passes a callback to Chat.stream_response
         self.interface.stream_response(callback=self._handle_summary_completion)
 
-    def _handle_summary_completion(self, summary_text: str):
-        """Callback executed by Chat after streaming finishes successfully."""
-        # Reset session, apply summary
-        self.session.reset_with_summary(summary_text)
-
-        # Clean up the turn state in Chat
-        if self.interface:
-            self.interface.reset_turn_state()
-            self.session.active_session = ""
-
-        console.print("[green]Summarization complete! New session primed.[/green]")
-        self.panel.spawn_status_panel()
-
     def list_sessions(self):
         """Fetches the session list and displays it."""
         sessions = self.session.find_sessions()
@@ -1157,30 +1225,38 @@ class CLIController:
             console.print(f"[red]No match found for:[/red] '{choice}'\n")
 
     def purge_all_attachments(self):
+        """Removes all attachments from the active session."""
         self.filemanager.remove_attachment("[all]")
         console.print("[cyan]All attachments removed.")
         self.panel.spawn_status_panel(toks=False)
 
-    # <~~PROMPT WRAPPER~~>
-    def _prompt_wrapper(
-        self, prefix, cancel_msg="Canceled.", allow_empty=False, **kwargs
-    ) -> str | None:
-        """Prompt_toolkit wrapper for validating input."""
-        try:
-            # **kwargs passes completers, styles, history, etc automatically
-            user_input = prompt(prefix, **kwargs)
-            stripped = user_input.strip()
-            if not stripped and not allow_empty:
-                console.print("[dim]No input detected.[/dim]\n")
-                return None
-            return stripped
-        except (KeyboardInterrupt, EOFError):
-            console.print(f"[dim]{cancel_msg}[/dim]\n")
-            return None
+
+# <~~API~~>
+class API:
+    """API interaction"""
+
+    def __init__(self, config: Config, session: SessionManager):
+        self.config: Config = config
+        self.session: SessionManager = session
+
+        active = self.config.active()
+        self.client = OpenAI(base_url=active["endpoint"], api_key=retrieve_key())
+        self.model_name = active["name"]
+
+    def fetch_stream(self) -> Stream[ChatCompletionChunk]:
+        """OpenAI API call"""
+        return self.client.chat.completions.create(
+            model=self.config.model_name,
+            messages=self.session.history,
+            stream=True,
+        )
 
 
+# <~~STATE-OF-TRUTH~~>
 @dataclass
 class TurnState:
+    """State-of-truth for the Chat class."""
+
     reasoning: str | None = None
     response: str | None = None
     reasoning_buffer: list[str] = field(default_factory=list)
@@ -1191,7 +1267,7 @@ class TurnState:
 
 # <~~RENDERING~~>
 class Chat:
-    """Handles synchronized rendering. Couples API interaction with Rich renderables."""
+    """Rendering logic. Creates a synchronous non-blocking rendering loop."""
 
     # <~~INTIALIZATION & GENERIC HELPERS~~>
     def __init__(
@@ -1201,26 +1277,18 @@ class Chat:
         filemanager: FileManager,
         ui: UIConstructor,
         panel: GlobalPanels,
+        api: API,
     ):
-        """Initializes all variables for Chat"""
-
         self.config: Config = config
         self.session: SessionManager = session
         self.filemanager: FileManager = filemanager
-        self.panel: GlobalPanels = panel
         self.ui: UIConstructor = ui
+        self.panel: GlobalPanels = panel
+        self.api: API = api
         self.state = TurnState()
 
         # Placeholder for live display object
         self.live: Live | None = None
-
-        # API object
-        self.completion: Stream[ChatCompletionChunk]
-
-        # API endpoint - Pulls the endpoint from config.json and the api key from keyring
-        active = self.config.active()
-        self.client = OpenAI(base_url=active["endpoint"], api_key=retrieve_key())
-        self.model_name = active["name"]
 
         # Initialization for boolean flags
         self.reasoning_panel_initialized: bool = False
@@ -1239,13 +1307,61 @@ class Chat:
         # Baseline timer for the rendering loop
         self.last_update_time: float = time.monotonic()
 
-        # Response start time, for calculating toks/sec in SessionManager
+        # Response start timer, for calculating toks/sec
         self.start_time: float = 0
 
         # Terminal height and panel scaling
         self.max_height: int = 0
         self.reasoning_limit: int = 0
         self.response_limit: int = 0
+
+    def _extract_reasoning(self, chunk: ChatCompletionChunk) -> str | None:
+        """Extracts reasoning content from a chunk"""
+        delta = chunk.choices[0].delta
+        reasoning = (
+            getattr(delta, "reasoning_content", None)
+            or getattr(delta, "reasoning", None)
+            or getattr(delta, "thinking", None)
+        )
+        return reasoning
+
+    def _extract_response(self, chunk: ChatCompletionChunk) -> str | None:
+        """Extracts response content from a chunk"""
+        delta = chunk.choices[0].delta
+        response = getattr(delta, "content", None) or getattr(delta, "refusal", None)
+        return response
+
+    def _update_reasoning(self, content: str):
+        """Updates reasoning panel content"""
+        self.reasoning_panel.renderable = content
+        if self.live:
+            self.live.refresh()
+
+    def _update_response(self, content: str):
+        """Updates response panel content"""
+        sanitized = sanitize_math_safe(content)
+        self.response_panel.renderable = Markdown(
+            sanitized,
+            code_theme=self.config.rich_code_theme,
+        )
+        if self.live:
+            self.live.refresh()
+
+    def _rebuild_layout(self, force_refresh: bool = False):
+        """Rebuilds the display layout"""
+        # force_refresh: forces an immediate repaint to the terminal
+        if self.live:
+            self.live.update(Group(*self.renderables_to_display), refresh=force_refresh)
+
+    def _terminal_height_setter(self):
+        """
+        Sets values for scaling live panels.\n
+        Ran every turn so the user can resize the terminal window freely during prompting.
+        """
+        if self.max_height != console.size.height:
+            self.max_height = console.size.height
+            self.reasoning_limit = int(self.max_height * 1.5)
+            self.response_limit = int(self.max_height * 1.5)
 
     def init_rich_live(self):
         """Defines and starts a rich live instance for the main streaming loop."""
@@ -1268,17 +1384,6 @@ class Chat:
         self.count_response = True
         self.renderables_to_display.clear()
 
-    def _terminal_height_setter(self):
-        """
-        Helper that provides values for scaling live panels.
-
-        Ran every turn so the user can resize the terminal window freely during prompting.
-        """
-        if self.max_height != console.size.height:
-            self.max_height = console.size.height
-            self.reasoning_limit = int(self.max_height * 1.5)
-            self.response_limit = int(self.max_height * 1.5)
-
     # <~~STREAMING~~>
     def stream_response(self, callback=None):
         """Facilitates the entire streaming process."""
@@ -1290,16 +1395,15 @@ class Chat:
                 spinner_constructor("Awaiting response...")
             )
             self._rebuild_layout(force_refresh=True)
-            self.completion = self._fetch_stream()
             # Parse incoming chunks, process them based on type, update panels
             campbells_chunky = True
-            for chunk in self.completion:
+            for chunk in self.api.fetch_stream():
                 if campbells_chunky:
                     self.renderables_to_display.clear()
                     campbells_chunky = False
                 self.chunk_parse(chunk)
-                self.spawn_reasoning_panel()
-                self.spawn_response_panel()
+                self.render_reasoning_panel()
+                self.render_response_panel()
                 self.update_renderables()
             end_time = time.perf_counter()
             self.session.turn_duration(self.start_time, end_time)
@@ -1332,14 +1436,6 @@ class Chat:
                     )
                     self.panel.spawn_status_panel()
 
-    def _fetch_stream(self) -> Stream[ChatCompletionChunk]:
-        """Isolated API call."""
-        return self.client.chat.completions.create(
-            model=self.config.model_name,
-            messages=self.session.history,
-            stream=True,
-        )
-
     def chunk_parse(self, chunk: ChatCompletionChunk):
         """Parses a chunk and places it into the appropriate buffer"""
         self.state.reasoning = self._extract_reasoning(chunk)
@@ -1348,22 +1444,6 @@ class Chat:
             self.state.reasoning_buffer.append(self.state.reasoning)
         if self.state.response:
             self.state.response_buffer.append(self.state.response)
-
-    def _extract_reasoning(self, chunk: ChatCompletionChunk) -> str | None:
-        """Extracts reasoning content from a chunk"""
-        delta = chunk.choices[0].delta
-        reasoning = (
-            getattr(delta, "reasoning_content", None)
-            or getattr(delta, "reasoning", None)
-            or getattr(delta, "thinking", None)
-        )
-        return reasoning
-
-    def _extract_response(self, chunk: ChatCompletionChunk) -> str | None:
-        """Extracts response content from a chunk"""
-        delta = chunk.choices[0].delta
-        response = getattr(delta, "content", None) or getattr(delta, "refusal", None)
-        return response
 
     def buffer_flusher(self):
         """Stops residual buffer content from 'leaking' into the next turn."""
@@ -1385,9 +1465,8 @@ class Chat:
 
     def update_renderables(self):
         """Updates rendered panels at a synchronized rate."""
-        # Sets up the internal timer for frame-limiting
         current_time = time.monotonic()
-        # Syncs text rendering with the live display's refresh rate.
+        # Syncs text rendering with the configured refresh rate.
         if current_time - self.last_update_time >= 1 / self.config.refresh_rate:
             if self.state.reasoning_buffer:
                 self.state.full_reasoning_content += "".join(
@@ -1411,42 +1490,7 @@ class Chat:
                         self.count_response = False
             self.last_update_time = current_time
 
-    def render_history(self):
-        """Renders a scrollable history."""
-        for msg in self.session.history:
-            role = msg.get("role", "unknown")
-            content = (msg.get("content") or "").strip()  # type: ignore , content is guaranteed or null
-            if not content:
-                continue  # Skip non-content entries
-            if role == "user":
-                self.spawn_user_panel(content)
-            elif role == "assistant":
-                self.spawn_assistant_panel(content)
-
-    def _update_reasoning(self, content: str):
-        """Updates reasoning panel content"""
-        self.reasoning_panel.renderable = content
-        if self.live:
-            self.live.refresh()
-
-    def _update_response(self, content: str):
-        """Updates response panel content"""
-        sanitized = sanitize_math_safe(content)
-        self.response_panel.renderable = Markdown(
-            sanitized,
-            code_theme=self.config.rich_code_theme,
-        )
-        if self.live:
-            self.live.refresh()
-
-    def _rebuild_layout(self, force_refresh: bool = False):
-        """Rebuilds the display layout"""
-        # force_refresh: forces an immediate repaint to the terminal
-        if self.live:
-            self.live.update(Group(*self.renderables_to_display), refresh=force_refresh)
-
-    # <~~PANEL SPAWNERS~~>
-    def spawn_reasoning_panel(self):
+    def render_reasoning_panel(self):
         """Manages the reasoning panel."""
         if self.state.reasoning is not None and not self.reasoning_panel_initialized:
             self.reasoning_panel = self.ui.reasoning_panel_constructor()
@@ -1454,7 +1498,7 @@ class Chat:
             self._rebuild_layout()
             self.reasoning_panel_initialized = True
 
-    def spawn_response_panel(self):
+    def render_response_panel(self):
         """Manages the response panel."""
         if self.state.response is not None and not self.response_panel_initialized:
             self.start_time = time.perf_counter()
@@ -1469,17 +1513,17 @@ class Chat:
             self._rebuild_layout()
             self.response_panel_initialized = True
 
-    def spawn_user_panel(self, content: str):
-        """Spawns the user panel."""
-        console.print()
-        console.print(self.ui.user_panel_constructor(content))
-        console.print()
-
-    def spawn_assistant_panel(self, content: str):
-        """Spawns the Response panel - for a scrollable history."""
-        self.response_panel = self.ui.response_panel_constructor()
-        self._update_response(content)
-        console.print(self.response_panel)
+    def render_history(self):
+        """Renders a scrollable history."""
+        for msg in self.session.history:
+            role = msg.get("role", "unknown")
+            content = (msg.get("content") or "").strip()  # type: ignore , content is guaranteed or null
+            if not content:
+                continue  # Skip non-content entries
+            if role == "user":
+                self.panel.spawn_user_panel(content)
+            elif role == "assistant":
+                self.panel.spawn_assistant_panel(content)
 
 
 # <~~CONTROLLER~~>
@@ -1494,7 +1538,7 @@ class App:
         except FileNotFoundError:
             self.config.save()
 
-        # Set up all 6 objects
+        # Define all 7 objects
         self.session_manager = SessionManager(self.config)
         self.file_manager = FileManager(self.session_manager)
         self.ui = UIConstructor(self.config, self.session_manager)
@@ -1502,8 +1546,15 @@ class App:
         self.commands = CLIController(
             self.config, self.session_manager, self.file_manager, self.panel, self.ui
         )
+        self.api = API(self.config, self.session_manager)
+
         self.chat = Chat(
-            self.config, self.session_manager, self.file_manager, self.ui, self.panel
+            self.config,
+            self.session_manager,
+            self.file_manager,
+            self.ui,
+            self.panel,
+            self.api,
         )
 
         # Give CLIController access to Chat for !load and !summary
@@ -1536,10 +1587,16 @@ class App:
             command_result = self.commands.handle_input(user_input)
             if command_result is not False:
                 if isinstance(command_result, tuple):
-                    self.chat.client = command_result[0]
-                    self.chat.model_name = command_result[1]
+                    self.api.client = command_result[0]
+                    self.api.model_name = command_result[1]
                 elif isinstance(command_result, OpenAI):
-                    self.chat.client = command_result
+                    self.api.client = command_result
+                continue
+
+            if re.match(r"^!", user_input):
+                console.print(
+                    "[dim]Command not found. Type [cyan]!help[/cyan] for usage.[/dim]\n"
+                )
                 continue
 
             # Hand user input over to the session manager
