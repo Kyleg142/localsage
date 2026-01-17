@@ -1245,9 +1245,20 @@ class API:
 
     def fetch_stream(self) -> Stream[ChatCompletionChunk]:
         """OpenAI API call"""
+        processed_history = []
+        for msg in self.session.history:
+            if (
+                processed_history
+                and processed_history[-1]["role"] == "user"
+                and msg["role"] == "user"
+            ):
+                processed_history[-1]["content"] += f"\n\n{msg['content']}"
+            else:
+                processed_history.append(msg.copy())
+
         return self.client.chat.completions.create(
             model=self.config.model_name,
-            messages=self.session.history,
+            messages=processed_history,
             stream=True,
         )
 
