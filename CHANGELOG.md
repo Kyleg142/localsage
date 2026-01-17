@@ -1,3 +1,9 @@
+### V1.3.2
+
+**Bug Fix**: Fixed an API error that could occur when sending a message after attaching a file. This was only affecting the new Devstral models as far as I know (due to a very strict chat template).
+
+---
+
 ### V1.3.1
 
 **UX:** Entering an incorrect command no longer triggers a model response.
