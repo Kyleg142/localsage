@@ -1,10 +1,18 @@
-### V1.3.2
+### v1.3.3
+
+**Technical Improvements:**
+- Implemented reasoning retention for interleaved thinking. Reasoning output is now retained automatically when using a thinking model.
+- Improved toks/sec throughput readout accuracy.
+
+---
+
+### v1.3.2
 
 **Bug Fix**: Fixed an API error that could occur when sending a message after attaching a file. This was only affecting the new Devstral models as far as I know (due to a very strict chat template).
 
 ---
 
-### V1.3.1
+### v1.3.1
 
 **UX:** Entering an incorrect command no longer triggers a model response.
 

@@ -418,6 +418,28 @@ class SessionManager:
             count = 0
         return count
 
+    def history_wrapper(self, response: str, reasoning: str = ""):
+        """Detects and wraps reasoning/CoT output for inclusion in assistant entries"""
+        history_entry = ""
+        if reasoning:
+            history_entry += f"<think>\n{reasoning.strip()}\n</think>\n\n"
+        history_entry += response.strip()
+        self.append_message("assistant", history_entry)
+
+    def process_history(self) -> list:
+        """Condenses duplicate user entries within session history"""
+        processed_history = []
+        for msg in self.history:
+            if (
+                processed_history
+                and processed_history[-1]["role"] == "user"
+                and msg["role"] == "user"
+            ):
+                processed_history[-1]["content"] += f"\n\n{msg['content']}"
+            else:
+                processed_history.append(msg.copy())
+        return processed_history
+
 
 # <~~FILE I/O~~>
 class FileManager:
@@ -1245,20 +1267,9 @@ class API:
 
     def fetch_stream(self) -> Stream[ChatCompletionChunk]:
         """OpenAI API call"""
-        processed_history = []
-        for msg in self.session.history:
-            if (
-                processed_history
-                and processed_history[-1]["role"] == "user"
-                and msg["role"] == "user"
-            ):
-                processed_history[-1]["content"] += f"\n\n{msg['content']}"
-            else:
-                processed_history.append(msg.copy())
-
         return self.client.chat.completions.create(
             model=self.config.model_name,
-            messages=processed_history,
+            messages=self.session.process_history(),
             stream=True,
         )
 
@@ -1387,6 +1398,7 @@ class Chat:
     def reset_turn_state(self):
         """Little helper that resets the turn state."""
         self.state = TurnState()
+        self.start_time = 0
         self.reasoning_panel_initialized = False
         self.response_panel_initialized = False
         self.reasoning_panel = Panel("")
@@ -1412,6 +1424,7 @@ class Chat:
                 if campbells_chunky:
                     self.renderables_to_display.clear()
                     campbells_chunky = False
+                    self.start_time = time.perf_counter()
                 self.chunk_parse(chunk)
                 self.render_reasoning_panel()
                 self.render_response_panel()
@@ -1442,8 +1455,9 @@ class Chat:
                 if callback:  # Callback for summarization
                     callback(self.state.full_response_content)
                 else:  # Normal completion
-                    self.session.append_message(
-                        "assistant", self.state.full_response_content
+                    self.session.history_wrapper(
+                        response=self.state.full_response_content,
+                        reasoning=self.state.full_reasoning_content,
                     )
                     self.panel.spawn_status_panel()
 
@@ -1512,7 +1526,6 @@ class Chat:
     def render_response_panel(self):
         """Manages the response panel."""
         if self.state.response is not None and not self.response_panel_initialized:
-            self.start_time = time.perf_counter()
             self.response_panel = self.ui.response_panel_constructor()
             # Adds the response panel to the live display, optionally consume the reasoning panel
             if (
