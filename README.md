@@ -16,11 +16,11 @@ Local Sage is an open-source CLI for chatting with LLMs. Not automation, not age
 
 Featuring **live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested with local LLMs hosted via **llama.cpp**.
 
-#### What else makes **Local Sage** shine? ✨
+#### What else makes **Local Sage** shine?
 - **Conversations live in your shell**, rendering directly to standard output for persistent history.
 - Fancy prompts with **command completion** and **in-memory history**.
 - **Context-aware file management.** See the [Under the Hood](#under-the-hood-%EF%B8%8F) section for more info!
-- Small but mighty, below 2000 lines of **Python** 🐍.
+- Small but mighty, below 2000 lines of **Python**. 🐍
 
 #### Plus everything you'd expect from a solid chat frontend.
 - **Session management**: load, save, delete, reset, and summarize sessions.
@@ -38,7 +38,7 @@ The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your
 You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**.
 
 ## Installation 💽
-Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.\
+Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.
 
 ###### For `uv`, open your terminal and type:
 ```bash
@@ -166,7 +166,9 @@ Local Sage will only ever store one API key in your keychain. If you switch prov
 
 ## What's Next?
 Upcoming features, in order:
-- System prompt list feature, for storing and swapping system prompts.
+- System prompt list, for storing and hot-swapping system prompts.
+- Better interactivity features, such as the ability to copy the last code block.
+- Further expansion upon the dynamic prompt implementation.
 
 ## Versioning 🔧
 The project follows basic versioning:
