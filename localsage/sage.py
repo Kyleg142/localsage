@@ -46,6 +46,7 @@ import getpass
 import json
 import logging
 import os
+import platform
 import re
 import sys
 import textwrap
@@ -182,6 +183,7 @@ COMMAND_COMPLETER = WordCompleter(
         "!a",
         "!attach",
         "!attachments",
+        "!cd",
         "!clear",
         "!config",
         "!consume",
@@ -242,7 +244,7 @@ class Config:
         self.refresh_rate: int = 30
         self.rich_code_theme: str = "monokai"
         self.reasoning_panel_consume: bool = True
-        self.system_prompt: str = "You are Sage, an AI learning assistant."
+        self.system_prompt: str = "You are Sage, a conversational AI assistant."
 
     def active(self) -> dict:
         """Return the currently active model profile."""
@@ -426,6 +428,28 @@ class SessionManager:
         history_entry += response.strip()
         self.append_message("assistant", history_entry)
 
+    def get_environment(self) -> str:
+        """Gathers details about the current environment."""
+        system_info = platform.platform()
+        wd = os.getcwd()
+
+        try:
+            items = os.listdir(wd)
+            files = [f for f in items if os.path.isfile(os.path.join(wd, f))]
+            dirs = [d for d in items if os.path.isdir(os.path.join(wd, d))]
+        except OSError:
+            files, dirs = [], []
+
+        return textwrap.dedent(f"""
+        [ENVIRONMENT CONTEXT]
+        RULE: ONLY REFERENCE ENVIRONMENT CONTEXT IF IT IS RELEVANT TO THE CONVERSATION
+        Current User: {USER_NAME}
+        Operating System: {system_info}
+        Working Directory: {wd}
+        Visible Files: {", ".join(files[:20])}
+        Visible Directories: {", ".join(dirs[:20])}
+        """).strip()
+
     def process_history(self) -> list:
         """Condenses duplicate user entries within session history"""
         processed_history = []
@@ -438,6 +462,12 @@ class SessionManager:
                 processed_history[-1]["content"] += f"\n\n{msg['content']}"
             else:
                 processed_history.append(msg.copy())
+
+        if processed_history and processed_history[0]["role"] == "system":
+            processed_history[0]["content"] = (
+                f"{processed_history[0]['content']}\n\n{self.get_environment()}"
+            )
+
         return processed_history
 
 
@@ -453,6 +483,10 @@ class FileManager:
         # Boiled down to two lines, simply validates that a file exists
         text = os.path.abspath(os.path.expanduser(text))
         return os.path.isfile(text)
+
+    def _directory_validator(self, text: str) -> bool:
+        text = os.path.abspath(os.path.expanduser(text))
+        return os.path.isdir(text)
 
     def process_file(self, path: str) -> tuple[bool, int]:
         """Processes a file for attachment"""
@@ -509,7 +543,15 @@ class FileManager:
         """Prompt_toolkit file validator"""
         return Validator.from_callable(
             self._file_validator,
-            error_message="File does not exist.",
+            error_message="Invalid file.",
+            move_cursor_to_end=True,
+        )
+
+    def dir_validator(self) -> Validator:
+        """Prompt_toolkit directory validator"""
+        return Validator.from_callable(
+            self._directory_validator,
+            error_message="Invalid directory.",
             move_cursor_to_end=True,
         )
 
@@ -671,6 +713,7 @@ class UIConstructor:
             | `!attachments` | List all current attachments. |
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
             | `!purge all` | Purges all attachments from the current session. |
+            | `!cd` | Change the current working directory. |
             | | |
             | **FILE TYPES:** | All text-based file types are acceptable. |
             | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
@@ -788,6 +831,7 @@ class CLIController:
             "!theme": self.set_code_theme,
             "!key": self.set_api_key,
             "!prompt": self.set_system_prompt,
+            "!cd": self.change_working_directory,
         }
 
         self.session_prompt = HTML("Enter a session name<seagreen>:</seagreen> ")
@@ -820,7 +864,7 @@ class CLIController:
             self.session.active_session = ""
 
         console.print("[green]Summarization complete! New session primed.[/green]")
-        self.panel.spawn_status_panel()
+        self.panel.spawn_status_panel(toks=False)
 
     def handle_input(self, user_input: str) -> bool | None | OpenAI:
         """Parse user input for a command & handle it"""
@@ -1252,6 +1296,27 @@ class CLIController:
         console.print("[cyan]All attachments removed.")
         self.panel.spawn_status_panel(toks=False)
 
+    def change_working_directory(self):
+        path = self._prompt_wrapper(
+            HTML("Enter directory path<seagreen>:</seagreen> "),
+            completer=PathCompleter(expanduser=True),
+            validator=self.filemanager.dir_validator(),
+            validate_while_typing=False,
+            style=COMPLETER_STYLER,
+        )
+        if not path:
+            return
+
+        try:
+            os.chdir(os.path.abspath(os.path.expanduser(path)))
+            console.print(
+                f"[green]Working directory is now set to:[/green] [cyan]{path}[/cyan]\n"
+            )
+        except OSError as e:
+            log_exception(e, "Error in change_working_directory()")
+            self.panel.spawn_error_panel("ERROR CHANGING DIRECTORY", f"{e}")
+            return
+
 
 # <~~API~~>
 class API:
@@ -1623,7 +1688,6 @@ class App:
                 )
                 continue
 
-            # Hand user input over to the session manager
             self.session_manager.append_message("user", user_input)
             console.print()
             # Tell Chat that it is go time
