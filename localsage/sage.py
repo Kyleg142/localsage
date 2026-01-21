@@ -654,6 +654,8 @@ class UIConstructor:
             (f"{self.config.alias_name}"),
             ("\nSystem Prompt: ", "bold sandy_brown"),
             (f"{self.config.system_prompt}", "italic"),
+            ("\nWorking Directory: ", "bold sandy_brown"),
+            (f"{os.getcwd()}"),
         )
         return Panel(
             intro_text,
@@ -739,6 +741,7 @@ class UIConstructor:
             - Your configuration file is located at: `{CONFIG_FILE}`
             - Your session files are located at:     `{SESSIONS_DIR}`
             - Your error logs are located at:        `{LOG_DIR}`
+            - The current working directory is:      `{os.getcwd()}`
             """)
         )
 
