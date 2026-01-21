@@ -56,6 +56,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 import keyring
+import pyperclip
 import tiktoken
 from keyring import get_password, set_password
 from keyring.backends import null
@@ -187,6 +188,7 @@ COMMAND_COMPLETER = WordCompleter(
         "!clear",
         "!config",
         "!consume",
+        "!cp",
         "!ctx",
         "!delete",
         "!h",
@@ -601,7 +603,9 @@ class UIConstructor:
 
     def assistant_panel_constructor(self, content: str) -> Panel:
         return Panel(
-            Markdown(sanitize_math_safe(content)),
+            Markdown(
+                sanitize_math_safe(content), code_theme=self.config.rich_code_theme
+            ),
             title=Text("💬 Response", style="bold green"),
             title_align="left",
             border_style="green",
@@ -675,6 +679,17 @@ class UIConstructor:
             expand=False,
         )
 
+    def copy_panel_constructor(self, blocks: str) -> Panel:
+        wrapped = f"### The following code has been copied to your clipboard\n```\n{blocks}\n```"
+        return Panel(
+            Markdown(wrapped, code_theme=self.config.rich_code_theme),
+            title=Text("📋 Clipboard Sync", style="bold orange1"),
+            title_align="left",
+            border_style="orange1",
+            box=box.HORIZONTALS,
+            padding=(0, 0),
+        )
+
     def help_chart_constructor(self) -> Markdown:
         return Markdown(
             textwrap.dedent("""
@@ -706,7 +721,7 @@ class UIConstructor:
             | `!clear` | Clear the terminal window. |
             | `!q` or `!quit` | Exit Local Sage. |
             | | |
-            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the main prompt. Also acts as an immediate exit. |
+            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the root prompt. Also acts as an immediate exit. |
             | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
 
             | **File Management** | *Commands for attaching and managing files* |
@@ -716,6 +731,7 @@ class UIConstructor:
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
             | `!purge all` | Purges all attachments from the current session. |
             | `!cd` | Change the current working directory. |
+            | `!cp` | Copy all code blocks from the last response. |
             | | |
             | **FILE TYPES:** | All text-based file types are acceptable. |
             | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
@@ -781,6 +797,10 @@ class GlobalPanels:
         """Spawns the Response panel - for a scrollable history."""
         console.print(self.ui.assistant_panel_constructor(content))
 
+    def spawn_copy_panel(self, blocks: str):
+        console.print(self.ui.copy_panel_constructor(blocks))
+        console.print()
+
 
 # <~~COMMANDS~~>
 class CLIController:
@@ -835,6 +855,7 @@ class CLIController:
             "!key": self.set_api_key,
             "!prompt": self.set_system_prompt,
             "!cd": self.change_working_directory,
+            "!cp": self.copy_last_snippet,
         }
 
         self.session_prompt = HTML("Enter a session name<seagreen>:</seagreen> ")
@@ -1300,6 +1321,7 @@ class CLIController:
         self.panel.spawn_status_panel(toks=False)
 
     def change_working_directory(self):
+        """Sets a new working directory"""
         path = self._prompt_wrapper(
             HTML("Enter directory path<seagreen>:</seagreen> "),
             completer=PathCompleter(expanduser=True),
@@ -1319,6 +1341,37 @@ class CLIController:
             log_exception(e, "Error in change_working_directory()")
             self.panel.spawn_error_panel("ERROR CHANGING DIRECTORY", f"{e}")
             return
+
+    def copy_last_snippet(self):
+        """Copies all Markdown code blocks from the last assistant message"""
+
+        assistant_msg: str = ""
+        msg = self.session.history[-1]
+        if msg["role"] == "assistant":
+            assistant_msg = msg["content"]  # pyright: ignore | can safely assume content always exists for assistant entries
+
+        if not assistant_msg:
+            console.print(
+                "[yellow]No assistant response found to copy from.[/yellow]\n"
+            )
+            return
+
+        blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", assistant_msg, re.DOTALL)
+        if not blocks:
+            console.print(
+                "[yellow]No code blocks found in the last response.[/yellow]\n"
+            )
+            return
+
+        code = "\n\n".join(blocks).strip()
+        try:
+            pyperclip.copy(code)
+            self.panel.spawn_copy_panel(code)
+        except Exception as e:
+            log_exception(e, "Error in copy_last_snippet()")
+            self.panel.spawn_error_panel(
+                "CLIPBOARD ERROR", f"Could not copy to clipboard: {e}"
+            )
 
 
 # <~~API~~>
