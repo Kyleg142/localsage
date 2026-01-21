@@ -27,6 +27,7 @@ dependencies = [
     "platformdirs>=4.5.0",
     "keyring>=25.6.0",
     "pylatexenc>=2.10",
+    "pyperclip>=1.11.0",
 ]
 
 keywords = [
