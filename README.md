@@ -70,6 +70,7 @@ Local Sage is designed with minimal dependencies, keeping the download light and
 - [tiktoken](https://github.com/openai/tiktoken) - Provides tokenization and enables context length calculation.
 - [platformdirs](https://github.com/platformdirs/platformdirs) - Detects default directories across operating systems.
 - [pylatexenc](https://github.com/phfaist/pylatexenc) - Absolutely vital for live math sanitization.
+- [pyperclip](https://pypi.org/project/pyperclip/) - For copying code blocks to the system clipboard.
 
 ### File Locations 📁
 Your config file, session files, and error logs are stored in your user's data directory.
