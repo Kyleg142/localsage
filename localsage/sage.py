@@ -1550,8 +1550,7 @@ class Chat:
                 self.render_reasoning_panel()
                 self.render_response_panel()
                 self.update_renderables()
-            end_time = time.perf_counter()
-            self.session.turn_duration(self.start_time, end_time)
+            self.session.turn_duration(self.start_time, time.perf_counter())
             time.sleep(0.02)  # Small timeout before buffers are flushed
             self.buffer_flusher()
         # Ctrl + C interrupt support
@@ -1711,6 +1710,19 @@ class App:
         """The app runner"""
         self.panel.spawn_intro_panel()
 
+        # Handle piped content
+        if not sys.stdin.isatty():
+            piped_content: str = sys.stdin.read().strip()
+            if piped_content:
+                wrapped = f"[PIPED CONTENT]\n{piped_content}"
+                if len(sys.argv) > 1:
+                    user_query = " ".join(sys.argv[1:])
+                    wrapped += f"\n\n[USER QUERY]\n{user_query}"
+                self.session_manager.append_message("user", wrapped)
+                self.chat.stream_response()
+                sys.stdin = open("/dev/tty" if os.name != "nt" else "CONIN$", "r")
+
+        # Start REPL
         while True:
             self.chat.reset_turn_state()
             try:
