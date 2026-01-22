@@ -1,3 +1,33 @@
+### v1.4.0
+
+Tons of new features for this release! This update is focused on turning Local Sage into a true shell-native tool!
+
+**Automated Environment Awareness**: The CLI now provides your model with basic environment awareness. Here is what your model sees... 
+```shell
+[ENVIRONMENT CONTEXT]                        # Header
+Current User: {USER_NAME}                    # Your username
+Operating System: {system_info}              # Your operating system
+Working Directory: {wd}                      # Current working directory, mutates when using !cd
+Visible Files: {", ".join(files[:20])}       # Up to 20 visible file names, mutates when using !cd
+Visible Directories: {", ".join(dirs[:20])}  # Up to 20 visible directory names, mutates when using !cd
+```
+**Input Piping**: You can now initiate the CLI by piping file content or command output via stdin. Here are some examples...
+```shell
+# Piping command output
+ps aux | localsage "What process is eating up all of my RAM?"
+
+# Piping file content
+cat README.md | localsage "What dependencies are listed for this project?"
+```
+
+**New `!cd` command** to change the current working directory.
+
+**New `!cp` command** to copy all code blocks from the previous assistant response to the system clipboard. Spawns a pretty Markdown preview panel as well!
+
+And some code cleanup, as per usual.
+
+---
+
 ### v1.3.3
 
 **Technical Improvements:**
