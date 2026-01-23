@@ -12,30 +12,31 @@
 <p align="center"><img src="https://raw.githubusercontent.com/Kyleg142/localsage/main/assets/localsage%2Bzellij.png" width="1200"><br><i>Local Sage running in Zellij, alongside Helix and Yazi.</i></p>
 
 ## About 🔎
-Local Sage is an open-source CLI for chatting with LLMs. Not automation, not agents, just pure dialogue. 
+Local Sage is an open-source stateful CLI for interacting with LLMs in shell-based workflows.
 
 Featuring **live Markdown rendering with inline math conversion** for a *silky smooth* chatting experience. Designed to hook into any **OpenAI API endpoint**, and tested with local LLMs hosted via **llama.cpp**.
 
-#### What else makes **Local Sage** shine?
-- **Conversations live in your shell**, rendering directly to standard output for persistent history.
-- Fancy prompts with **command completion** and **in-memory history**.
-- **Context-aware file management.** See the [Under the Hood](#under-the-hood-%EF%B8%8F) section for more info!
-- Small but mighty, below 2000 lines of **Python**. 🐍
+**Additional Features:**
+- **Standard Output Rendering**: History is persistent and scrollable, even after exiting the CLI.
 
-#### Plus everything you'd expect from a solid chat frontend.
-- **Session management**: load, save, delete, reset, and summarize sessions.
-- **Profile management**: save, delete, and switch model profiles.
-- Reasoning/Chain-of-thought support with a dedicated Reasoning panel.
-- Context length monitoring, shown through a subtle status panel.
+- **Standard Input Piping**: Pipe stdin directly into Local Sage from the command line.\
+  *Example*: `ps aux | localsage "What process is consuming the most memory?"`
+- **Fancy Prompts**: Command completion, path completion, and in-memory history for a shell-native UX.
+- **Context-aware File Management**: Files are replaced on re-attachment and can be purged from a session, restoring context.
+- **Automated Environment Awareness**: Your model sees your username, your OS name, and the contents of your current working directory.
+- **Session Management**: Load, save, delete, reset, and summarize sessions.
+- **Profile Management**: Save, delete, and switch model profiles.
+- **Context & Throughput Monitoring**: Shown through a subtle status panel.
+- **Built-in Markdown themes**: Customize your output with a variety of built-in Markdown themes. Available themes are listed [here](https://pygments.org/styles/).
 
-There is also a collection of [built-in Markdown themes](https://pygments.org/styles/) to choose from to customize your sessions!
+Check out the [Under the Hood](#under-the-hood-%EF%B8%8F) section if you want to learn more!
 
 ## Compatibility 🔩
 **Python 3.10** or later required.
 
 The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your terminal emulator has relatively modern features. Alacritty works well. So does kitty and Ghostty.
 
-You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**.
+You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**. Setting the `OPENAI_API_KEY` environment variable works as well.
 
 ## Installation 💽
 Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.
@@ -57,9 +58,10 @@ Configuration is done entirely through interactive commands. You never have to t
 3. Use `!ctx` to set your context length.
 4. (Optional) Set your own system prompt with `!prompt` or an API key with `!key`.
 
-**Typical API endpoint format:** `http://ipaddress:port/v1`
-
-**Tip:** If you press `tab` while at the main prompt, you can access a command completer for easy command use.
+> [!TIP]
+> Typical API endpoint format: `http://ipaddress:port/v1`
+> 
+> If you press `tab` while at the main prompt, you can access a command completer for easy command use.
 
 ### Dependencies 🧰
 Local Sage is designed with minimal dependencies, keeping the download light and minimizing library bloat.
@@ -70,6 +72,7 @@ Local Sage is designed with minimal dependencies, keeping the download light and
 - [tiktoken](https://github.com/openai/tiktoken) - Provides tokenization and enables context length calculation.
 - [platformdirs](https://github.com/platformdirs/platformdirs) - Detects default directories across operating systems.
 - [pylatexenc](https://github.com/phfaist/pylatexenc) - Absolutely vital for live math sanitization.
+- [pyperclip](https://pypi.org/project/pyperclip/) - For copying code blocks to the system clipboard.
 
 ### File Locations 📁
 Your config file, session files, and error logs are stored in your user's data directory.
@@ -79,6 +82,50 @@ Your config file, session files, and error logs are stored in your user's data d
 | Linux: | ~/.local/share/LocalSage |
 | macOS: | ~/Library/Application Support/LocalSage |
 | Windows: | %localappdata%/LocalSage |
+
+## Commands 📄
+All usage charts are present below. You can render them within the CLI by typing `!h`.
+
+| **Profile Management** | *Manage multiple models & API endpoints* |
+| --- | ----------- |
+| `!profile add` | Add a new model profile. Prompts for alias, model name, and **API endpoint**. |
+| `!profile remove` | Remove an existing profile. |
+| `!profile list` | List configured profiles. |
+| `!profile switch` | Switch between profiles. |
+---
+| **Configuration** | *Main configuration commands* |
+| --- | ----------- |
+| `!config` | Display your current configuration settings and default directories. |
+| `!consume` | Toggle reasoning panel consumption.  |
+| `!ctx` | Set maximum context length (for CLI functionality). |
+| `!key` | Set an API key, if needed. Your API key is stored in your OS keychain. |
+| `!prompt` | Set a new system prompt. Takes effect on your next session. |
+| `!rate` | Set the current refresh rate (default is 30). Higher refresh rate = higher CPU usage. |
+| `!theme` | Change your Markdown theme. Built-in themes can be found at https://pygments.org/styles/ |
+---
+| **Session Management** | *Session management commands* |
+| --- | ----------- |
+| `!s` or `!save` | Save the current session. |
+| `!l` or `!load` | Load a saved session, including a scrollable conversation history. |
+| `!sum` or `!summary` | Prompt your model for summarization and start a fresh session with the summary. |
+| `!sessions` | List all saved sessions. |
+| `!reset` | Reset for a fresh session. |
+| `!delete` | Delete a saved session. |
+| `!clear` | Clear the terminal window. |
+| `!q` or `!quit` | Exit Local Sage. |
+| `Ctrl + C` | Abort mid-stream, reset the turn, and return to the root prompt. Also acts as an immediate exit. |
+| **WARNING** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
+---
+| **File Management** | *Commands for attaching and managing files* |
+| --- | ----------- |
+| `!a` or `!attach` | Attaches a file to the current session. |
+| `!attachments` | List all current attachments. |
+| `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
+| `!purge all` | Purges all attachments from the current session. |
+| `!cd` | Change the current working directory. |
+| `!cp` | Copy all code blocks from the last response. |
+| **FILE TYPES** | All text-based file types are acceptable. No PDFs. |
+| **NOTE** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
 
 ## Docker 🐋
 This is a general guide for running Local Sage in a Docker container. The `docker` commands below are suggested templates, feel free to edit them as necessary.
@@ -143,14 +190,29 @@ You may have to add specific options to your `docker run` command if you are run
 ## Display Notes 🖥️
 Typing into the terminal while streaming is active may cause visual artifacting. Avoid typing into the terminal until the current generation finishes.
 
-A monospaced Nerd font is **HIGHLY** recommended. It ensures that Markdown, math, and icons all align well on-screen. The main prompt uses a Nerd font chevron.
+A monospaced Nerd font is **HIGHLY** recommended. It ensures that Markdown, math, and icons all align well on-screen. The root prompt uses a Nerd font chevron.
 
 ## Under the Hood 🛠️
 
 #### Context-Aware File Management
-If you re-attach a file, context consumption is **massively reduced** by removing the original file from the conversation history and then appending the new copy. Removing an attachment (via the `!purge` command) will **fully refund** its context consumption.
+When a file is attached to a session, a wrapper is applied to the file contents before being appended to the session history. This wrapper enables attachment detection via regex, for file management.
 
-#### Rendering & Streaming (For Technical Users)
+If you re-attach a file, context consumption is massively reduced by removing the entry containing the file contents from the session history and then appending the new copy. You can also completely remove a file from a session via the `!purge` command, which restores context spent.
+
+#### Automated Environment Awareness
+Your model is provided with basic environment context that mutates depending on the current working directory.
+
+This is what your model can see...
+```shell
+[ENVIRONMENT CONTEXT]                        # Header
+Current User: {USER_NAME}                    # Your username
+Operating System: {system_info}              # Your operating system
+Working Directory: {wd}                      # Current working directory, mutates when using !cd
+Visible Files: {", ".join(files[:20])}       # Up to 20 visible file names, mutates when using !cd
+Visible Directories: {", ".join(dirs[:20])}  # Up to 20 visible directory names, mutates when using !cd
+```
+
+#### Rendering & Streaming
 At its core, Local Sage uses the **Rich** library combined with a custom math sanitizer to render live Markdown and readable inline math. Chunk processing is frame-synchronized to the refresh rate of a rich.live display, meaning that the entire rendering process occurs at a customizable interval. Effectively a hand-rolled, lightweight, synchronized rendering engine running right in your terminal.
 
 You can adjust the refresh rate using the `!rate` command (30 FPS by default).
@@ -161,14 +223,6 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 **This should only be noticeable on large responses that consume over an entire viewport's worth of vertical space.**
 
 **Local Sage is text-only.** This limitation keeps Local Sage portable, lightweight, and backend-agnostic.
-
-Local Sage will only ever store one API key in your keychain. If you switch providers often, you will have to swap your API key with `!key`.
-
-## What's Next?
-Upcoming features, in order:
-- System prompt list, for storing and hot-swapping system prompts.
-- Better interactivity features, such as the ability to copy the last code block.
-- Further expansion upon the dynamic prompt implementation.
 
 ## Versioning 🔧
 The project follows basic versioning:

@@ -4,7 +4,6 @@
 #  LOCAL SAGE
 # <~~~~~~~~~~>
 
-# Welcome! This file contains all of the functional goodness for Local Sage.
 # All code is quality-checked for pythonic standards with basedpyright and ruff.
 # You can get an idea of the architecture in the docstring below.
 
@@ -40,12 +39,14 @@ LIBRARIES:
     - prompt_toolkit: Interactive prompts
     - platformdirs:   OS-independent directories
     - keyring:        Safe API key storage
+    - pyperclip:      Copying code blocks to the system clipboard
 """
 
 import getpass
 import json
 import logging
 import os
+import platform
 import re
 import sys
 import textwrap
@@ -55,6 +56,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 import keyring
+import pyperclip
 import tiktoken
 from keyring import get_password, set_password
 from keyring.backends import null
@@ -182,9 +184,11 @@ COMMAND_COMPLETER = WordCompleter(
         "!a",
         "!attach",
         "!attachments",
+        "!cd",
         "!clear",
         "!config",
         "!consume",
+        "!cp",
         "!ctx",
         "!delete",
         "!h",
@@ -242,7 +246,7 @@ class Config:
         self.refresh_rate: int = 30
         self.rich_code_theme: str = "monokai"
         self.reasoning_panel_consume: bool = True
-        self.system_prompt: str = "You are Sage, an AI learning assistant."
+        self.system_prompt: str = "You are Sage, a conversational AI assistant."
 
     def active(self) -> dict:
         """Return the currently active model profile."""
@@ -426,6 +430,28 @@ class SessionManager:
         history_entry += response.strip()
         self.append_message("assistant", history_entry)
 
+    def get_environment(self) -> str:
+        """Gathers details about the current environment."""
+        system_info = platform.platform()
+        wd = os.getcwd()
+
+        try:
+            items = os.listdir(wd)
+            files = [f for f in items if os.path.isfile(os.path.join(wd, f))]
+            dirs = [d for d in items if os.path.isdir(os.path.join(wd, d))]
+        except OSError:
+            files, dirs = [], []
+
+        return textwrap.dedent(f"""
+        [ENVIRONMENT CONTEXT]
+        RULE: ONLY REFERENCE ENVIRONMENT CONTEXT IF IT IS RELEVANT TO THE CONVERSATION
+        Current User: {USER_NAME}
+        Operating System: {system_info}
+        Working Directory: {wd}
+        Visible Files: {", ".join(files[:20])}
+        Visible Directories: {", ".join(dirs[:20])}
+        """).strip()
+
     def process_history(self) -> list:
         """Condenses duplicate user entries within session history"""
         processed_history = []
@@ -438,6 +464,12 @@ class SessionManager:
                 processed_history[-1]["content"] += f"\n\n{msg['content']}"
             else:
                 processed_history.append(msg.copy())
+
+        if processed_history and processed_history[0]["role"] == "system":
+            processed_history[0]["content"] = (
+                f"{processed_history[0]['content']}\n\n{self.get_environment()}"
+            )
+
         return processed_history
 
 
@@ -453,6 +485,10 @@ class FileManager:
         # Boiled down to two lines, simply validates that a file exists
         text = os.path.abspath(os.path.expanduser(text))
         return os.path.isfile(text)
+
+    def _directory_validator(self, text: str) -> bool:
+        text = os.path.abspath(os.path.expanduser(text))
+        return os.path.isdir(text)
 
     def process_file(self, path: str) -> tuple[bool, int]:
         """Processes a file for attachment"""
@@ -509,7 +545,15 @@ class FileManager:
         """Prompt_toolkit file validator"""
         return Validator.from_callable(
             self._file_validator,
-            error_message="File does not exist.",
+            error_message="Invalid file.",
+            move_cursor_to_end=True,
+        )
+
+    def dir_validator(self) -> Validator:
+        """Prompt_toolkit directory validator"""
+        return Validator.from_callable(
+            self._directory_validator,
+            error_message="Invalid directory.",
             move_cursor_to_end=True,
         )
 
@@ -559,7 +603,9 @@ class UIConstructor:
 
     def assistant_panel_constructor(self, content: str) -> Panel:
         return Panel(
-            Markdown(sanitize_math_safe(content)),
+            Markdown(
+                sanitize_math_safe(content), code_theme=self.config.rich_code_theme
+            ),
             title=Text("💬 Response", style="bold green"),
             title_align="left",
             border_style="green",
@@ -612,6 +658,8 @@ class UIConstructor:
             (f"{self.config.alias_name}"),
             ("\nSystem Prompt: ", "bold sandy_brown"),
             (f"{self.config.system_prompt}", "italic"),
+            ("\nWorking Directory: ", "bold sandy_brown"),
+            (f"{os.getcwd()}"),
         )
         return Panel(
             intro_text,
@@ -629,6 +677,17 @@ class UIConstructor:
             title_align="left",
             border_style="red",
             expand=False,
+        )
+
+    def copy_panel_constructor(self, blocks: str) -> Panel:
+        wrapped = f"### The following code has been copied to your clipboard\n```\n{blocks}\n```"
+        return Panel(
+            Markdown(wrapped, code_theme=self.config.rich_code_theme),
+            title=Text("📋 Clipboard Sync", style="bold orange1"),
+            title_align="left",
+            border_style="orange1",
+            box=box.HORIZONTALS,
+            padding=(0, 0),
         )
 
     def help_chart_constructor(self) -> Markdown:
@@ -662,7 +721,7 @@ class UIConstructor:
             | `!clear` | Clear the terminal window. |
             | `!q` or `!quit` | Exit Local Sage. |
             | | |
-            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the main prompt. Also acts as an immediate exit. |
+            | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the root prompt. Also acts as an immediate exit. |
             | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
 
             | **File Management** | *Commands for attaching and managing files* |
@@ -671,6 +730,8 @@ class UIConstructor:
             | `!attachments` | List all current attachments. |
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
             | `!purge all` | Purges all attachments from the current session. |
+            | `!cd` | Change the current working directory. |
+            | `!cp` | Copy all code blocks from the last response. |
             | | |
             | **FILE TYPES:** | All text-based file types are acceptable. |
             | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
@@ -696,6 +757,7 @@ class UIConstructor:
             - Your configuration file is located at: `{CONFIG_FILE}`
             - Your session files are located at:     `{SESSIONS_DIR}`
             - Your error logs are located at:        `{LOG_DIR}`
+            - The current working directory is:      `{os.getcwd()}`
             """)
         )
 
@@ -734,6 +796,10 @@ class GlobalPanels:
     def spawn_assistant_panel(self, content: str):
         """Spawns the Response panel - for a scrollable history."""
         console.print(self.ui.assistant_panel_constructor(content))
+
+    def spawn_copy_panel(self, blocks: str):
+        console.print(self.ui.copy_panel_constructor(blocks))
+        console.print()
 
 
 # <~~COMMANDS~~>
@@ -788,6 +854,8 @@ class CLIController:
             "!theme": self.set_code_theme,
             "!key": self.set_api_key,
             "!prompt": self.set_system_prompt,
+            "!cd": self.change_working_directory,
+            "!cp": self.copy_last_snippet,
         }
 
         self.session_prompt = HTML("Enter a session name<seagreen>:</seagreen> ")
@@ -820,7 +888,7 @@ class CLIController:
             self.session.active_session = ""
 
         console.print("[green]Summarization complete! New session primed.[/green]")
-        self.panel.spawn_status_panel()
+        self.panel.spawn_status_panel(toks=False)
 
     def handle_input(self, user_input: str) -> bool | None | OpenAI:
         """Parse user input for a command & handle it"""
@@ -1252,6 +1320,59 @@ class CLIController:
         console.print("[cyan]All attachments removed.")
         self.panel.spawn_status_panel(toks=False)
 
+    def change_working_directory(self):
+        """Sets a new working directory"""
+        path = self._prompt_wrapper(
+            HTML("Enter directory path<seagreen>:</seagreen> "),
+            completer=PathCompleter(expanduser=True),
+            validator=self.filemanager.dir_validator(),
+            validate_while_typing=False,
+            style=COMPLETER_STYLER,
+        )
+        if not path:
+            return
+
+        try:
+            os.chdir(os.path.abspath(os.path.expanduser(path)))
+            console.print(
+                f"[green]Working directory is now set to:[/green] [cyan]{path}[/cyan]\n"
+            )
+        except OSError as e:
+            log_exception(e, "Error in change_working_directory()")
+            self.panel.spawn_error_panel("ERROR CHANGING DIRECTORY", f"{e}")
+            return
+
+    def copy_last_snippet(self):
+        """Copies all Markdown code blocks from the last assistant message"""
+
+        assistant_msg: str = ""
+        msg = self.session.history[-1]
+        if msg["role"] == "assistant":
+            assistant_msg = msg["content"]  # pyright: ignore | can safely assume content always exists for assistant entries
+
+        if not assistant_msg:
+            console.print(
+                "[yellow]No assistant response found to copy from.[/yellow]\n"
+            )
+            return
+
+        blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", assistant_msg, re.DOTALL)
+        if not blocks:
+            console.print(
+                "[yellow]No code blocks found in the last response.[/yellow]\n"
+            )
+            return
+
+        code = "\n\n".join(blocks).strip()
+        try:
+            pyperclip.copy(code)
+            self.panel.spawn_copy_panel(code)
+        except Exception as e:
+            log_exception(e, "Error in copy_last_snippet()")
+            self.panel.spawn_error_panel(
+                "CLIPBOARD ERROR", f"Could not copy to clipboard: {e}"
+            )
+
 
 # <~~API~~>
 class API:
@@ -1429,8 +1550,7 @@ class Chat:
                 self.render_reasoning_panel()
                 self.render_response_panel()
                 self.update_renderables()
-            end_time = time.perf_counter()
-            self.session.turn_duration(self.start_time, end_time)
+            self.session.turn_duration(self.start_time, time.perf_counter())
             time.sleep(0.02)  # Small timeout before buffers are flushed
             self.buffer_flusher()
         # Ctrl + C interrupt support
@@ -1590,6 +1710,19 @@ class App:
         """The app runner"""
         self.panel.spawn_intro_panel()
 
+        # Handle piped content
+        if not sys.stdin.isatty():
+            piped_content: str = sys.stdin.read().strip()
+            if piped_content:
+                wrapped = f"[PIPED CONTENT]\n{piped_content}"
+                if len(sys.argv) > 1:
+                    user_query = " ".join(sys.argv[1:])
+                    wrapped += f"\n\n[USER QUERY]\n{user_query}"
+                self.session_manager.append_message("user", wrapped)
+                self.chat.stream_response()
+                sys.stdin = open("/dev/tty" if os.name != "nt" else "CONIN$", "r")
+
+        # Start REPL
         while True:
             self.chat.reset_turn_state()
             try:
@@ -1623,7 +1756,6 @@ class App:
                 )
                 continue
 
-            # Hand user input over to the session manager
             self.session_manager.append_message("user", user_input)
             console.print()
             # Tell Chat that it is go time
