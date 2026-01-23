@@ -23,10 +23,10 @@ jobs:
           pip install pytest
 
       - name: Run Ruff
-        uses: astral-sh/ruff-action@v1
+        uses: astral-sh/ruff-action@v3
 
       - name: Run Pyright
-        uses: microsoft/pyright-action@v1
+        uses: jakebailey/pyright-action@v2
         with:
           version: "latest"
 
