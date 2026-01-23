@@ -4,7 +4,6 @@
 #  LOCAL SAGE
 # <~~~~~~~~~~>
 
-# Welcome! This file contains all of the functional goodness for Local Sage.
 # All code is quality-checked for pythonic standards with basedpyright and ruff.
 # You can get an idea of the architecture in the docstring below.
 
@@ -40,6 +39,7 @@ LIBRARIES:
     - prompt_toolkit: Interactive prompts
     - platformdirs:   OS-independent directories
     - keyring:        Safe API key storage
+    - pyperclip:      Copying code blocks to the system clipboard
 """
 
 import getpass
