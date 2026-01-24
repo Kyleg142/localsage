@@ -1,3 +1,11 @@
+### v1.4.1
+
+**New Features**
+- Web scraping! Websites can now be scraped and appended to history by using the `!web` command. `!purge` can also be used to remove attached website content.
+- Sliding context window. Session history is now automatically truncated when exceeding 95% context consumption.
+
+**UX**: Attachments are now removed by index, rather than by name. Index is now included when listing attachments.
+
 ### v1.4.0
 
 Tons of new features for this release! This update is focused on turning Local Sage into a true shell-native tool!
