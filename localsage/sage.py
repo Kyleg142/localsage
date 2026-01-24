@@ -58,6 +58,7 @@ from logging.handlers import RotatingFileHandler
 import keyring
 import pyperclip
 import tiktoken
+import trafilatura
 from keyring import get_password, set_password
 from keyring.backends import null
 from keyring.errors import KeyringError
@@ -213,6 +214,7 @@ COMMAND_COMPLETER = WordCompleter(
         "!sum",
         "!summary",
         "!theme",
+        "!web",
     ],
     match_middle=True,
     WORD=True,
@@ -222,6 +224,7 @@ COMMAND_COMPLETER = WordCompleter(
 # Compiled regex used in the file management system
 # Alternative, allows whitespace: ^---\s*File:\s*(.+?)
 FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
+SITE_PATTERN = re.compile(r"^---\nWebsite: `(.*?)`", re.MULTILINE)
 
 # <~~INTEGRATION~~>
 console = Console()
@@ -472,6 +475,20 @@ class SessionManager:
 
         return processed_history
 
+    def trim_history(self):
+        """Prunes oldest messages when the context window is full"""
+        limit = int(self.config.context_length * 0.95)
+        tokens = self.count_tokens()
+        if isinstance(tokens, tuple):
+            tokens = tokens[0]
+
+        while tokens > limit and len(self.history) > 1:
+            if len(self.token_cache) > 1:
+                removed_item = self.token_cache.pop(1)
+                if removed_item is not None:
+                    tokens -= removed_item[1]
+            self.history.pop(1)
+
 
 # <~~FILE I/O~~>
 class FileManager:
@@ -515,16 +532,35 @@ class FileManager:
         self.session.append_message("user", wrapped)
         return is_update, consumption
 
-    def remove_attachment(self, target_name: str) -> str | None:
+    def process_website(self, url: str) -> int:
+        """Processes a website for attachment (uses trafilatura)"""
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            raise Exception("The website blocked the request or returned no data.")
+
+        content = trafilatura.extract(
+            downloaded, include_links=True, include_comments=False
+        )
+
+        if not content:
+            content = trafilatura.html2txt(downloaded)
+        if not content:
+            raise Exception("Could not find any readable text on this page.")
+
+        consumption = self.session.encode(content)
+        im_a_wrapper = f"---\nWebsite: `{url}`\n{content}\n---"
+        self.session.append_message("user", im_a_wrapper)
+        return consumption
+
+    def remove_attachment(self, target: int | str) -> str | None:
         """Removes an attachment by name."""
         attachments = self.get_attachments()
-        target = target_name.lower().strip()
-        for index, kind, name in reversed(attachments):
+        for i, kind, _ in reversed(attachments):
             if target == "[all]":
-                self.session.remove_history(index)
+                self.session.remove_history(i)
                 continue
-            if target == name.lower():
-                self.session.remove_history(index)
+            if target == i:
+                self.session.remove_history(i)
                 return kind  # For the UI to catch
         return None
 
@@ -535,10 +571,13 @@ class FileManager:
         for i, msg in enumerate(self.session.history):
             content = msg.get("content")
             if isinstance(content, str):
-                match = FILE_PATTERN.match(content)
-                if match:
+                match1 = FILE_PATTERN.match(content)
+                match2 = SITE_PATTERN.match(content)
+                if match1:
                     # Append each attachment to a new structured list
-                    attachments.append((i, "file", match.group(1)))
+                    attachments.append((i, "file", match1.group(1)))
+                if match2:
+                    attachments.append((i, "website", match2.group(1)))
         return attachments
 
     def file_validator(self) -> Validator:
@@ -856,6 +895,7 @@ class CLIController:
             "!prompt": self.set_system_prompt,
             "!cd": self.change_working_directory,
             "!cp": self.copy_last_snippet,
+            "!web": self.read_webpage,
         }
 
         self.session_prompt = HTML("Enter a session name<seagreen>:</seagreen> ")
@@ -1282,8 +1322,10 @@ class CLIController:
             console.print("[dim]No attachments found.[/dim]\n")
             return
         console.print("[cyan]Attachments in context:[/cyan]")
-        for _, kind, name in attachments:
-            console.print(f"• [{kind}] {name}")
+        for i, kind, name in attachments:
+            console.print(
+                f"{i}. [sandy_brown]{kind.capitalize()}:[/sandy_brown] {name}"
+            )
         console.print()
 
     def purge_attachment(self):
@@ -1293,26 +1335,37 @@ class CLIController:
             console.print("[dim]No attachments found.[/dim]\n")
             return
         console.print("[cyan]Attachments in context:[/cyan]")
-        for _, kind, name in attachments:
-            console.print(f"• [{kind}] {name}")
+        for i, kind, name in attachments:
+            console.print(
+                f"{i}. [sandy_brown]{kind.capitalize()}:[/sandy_brown] {name}"
+            )
         console.print()
 
         # Prompt for a file to purge
         choice = self._prompt_wrapper(
-            HTML("Enter file name to remove<seagreen>:</seagreen> ")
+            HTML("Enter an entry number to purge<seagreen>:</seagreen> ")
         )
-        if not choice:
+        if choice:
+            try:
+                value = int(choice)
+                if value <= 0:
+                    console.print("[dim]Value must be greater than 0.[/dim]\n")
+                    return
+            except ValueError:
+                console.print("[dim]Only valid entry numbers are acceptable[/dim]\n")
+                return
+        else:
             return
 
         # And purge the file from the session
-        removed_file = self.filemanager.remove_attachment(choice)
+        removed_file = self.filemanager.remove_attachment(value)
         if removed_file:
             console.print(
-                f"[green]{removed_file.capitalize()}[/green] '{choice}' [green]removed.[/green]"
+                f"[green]{removed_file.capitalize()} removed from context.[/green]"
             )
             self.panel.spawn_status_panel(toks=False)
         else:
-            console.print(f"[red]No match found for:[/red] '{choice}'\n")
+            console.print(f"[red]Entry {value} does not exist.[/red]\n")
 
     def purge_all_attachments(self):
         """Removes all attachments from the active session."""
@@ -1372,6 +1425,27 @@ class CLIController:
             self.panel.spawn_error_panel(
                 "CLIPBOARD ERROR", f"Could not copy to clipboard: {e}"
             )
+
+    def read_webpage(self):
+        """Scrapes a web page and appends the contents to history."""
+        url = self._prompt_wrapper(
+            HTML("Enter a URL<seagreen>:</seagreen> "),
+        )
+        if not url:
+            return
+        with console.status(
+            f"[bold medium_orchid]Reading {url}...[/bold medium_orchid]", spinner="moon"
+        ):
+            try:
+                site = self.filemanager.process_website(url)
+                consumption = (site / self.config.context_length) * 100
+            except Exception as e:
+                console.print(f"[red]Failed to fetch URL:[/red] {e}\n")
+                return
+            console.print(
+                f"[green]Successfully ingested[/green] {url}\n[yellow]Context size:[/yellow] {site}, {consumption:.1f}%"
+            )
+            self.panel.spawn_status_panel(toks=False)
 
 
 # <~~API~~>
@@ -1532,6 +1606,7 @@ class Chat:
     def stream_response(self, callback=None):
         """Facilitates the entire streaming process."""
         self._terminal_height_setter()
+        self.session.trim_history()
         self.cancel_requested = False
         try:  # Start rich live display and create the initial connection to the API
             self.init_rich_live()
