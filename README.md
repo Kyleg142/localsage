@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg">
 </p>
 
-<p align="center"><b>A lightweight LLM chat interface that embraces the command line.</b></p>
+<p align="center"><b>A 'human-in-the-loop' LLM interface that embraces the command line.</b></p>
 
 <p align="center"><img width="1200" alt="Local Sage Demo" src="https://raw.githubusercontent.com/Kyleg142/localsage/main/assets/localsagedemo.gif"></p>
 
@@ -19,10 +19,12 @@ Featuring **live Markdown rendering with inline math conversion** for a *silky s
 **Additional Features:**
 - **Standard Output Rendering**: History is persistent and scrollable, even after exiting the CLI.
 
-- **Standard Input Piping**: Pipe stdin directly into Local Sage from the command line.\
+- **Standard Input Piping**: Pipe stdin directly into Local Sage from the command line or a script.\
   *Example*: `ps aux | localsage "What process is consuming the most memory?"`
 - **Fancy Prompts**: Command completion, path completion, and in-memory history for a shell-native UX.
-- **Context-aware File Management**: Files are replaced on re-attachment and can be purged from a session, restoring context.
+- **Website Scraping**: Scrape a website with a simple command, and attach it's contents to the current session.
+- **Context-aware File Management**: Files are replaced on re-attachment and can be purged from a session, restoring context.\
+  *Note*: Attached website content can be purged from a session as well.
 - **Automated Environment Awareness**: Your model sees your username, your OS name, and the contents of your current working directory.
 - **Session Management**: Load, save, delete, reset, and summarize sessions.
 - **Profile Management**: Save, delete, and switch model profiles.
@@ -36,7 +38,7 @@ Check out the [Under the Hood](#under-the-hood-%EF%B8%8F) section if you want to
 
 The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your terminal emulator has relatively modern features. Alacritty works well. So does kitty and Ghostty.
 
-You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**. Setting the `OPENAI_API_KEY` environment variable works as well.
+You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**. Setting the `OPENAI_API_KEY` environment variable works as well, and overrides all other options.
 
 ## Installation 💽
 Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.
@@ -53,14 +55,12 @@ Type **`localsage`** into your terminal to launch the CLI. Type **`!h`** to view
 
 ### Getting Started ✔️
 Configuration is done entirely through interactive commands. You never have to touch a config file.
-1. Configure a profile with `!profile add`.
+1. Configure a profile with `!profile add`. API endpoint format: `http://ipaddress:port/v1`.
 2. Type `!profile switch` to switch to your new profile.
 3. Use `!ctx` to set your context length.
 4. (Optional) Set your own system prompt with `!prompt` or an API key with `!key`.
 
 > [!TIP]
-> Typical API endpoint format: `http://ipaddress:port/v1`
-> 
 > If you press `tab` while at the main prompt, you can access a command completer for easy command use.
 
 ### Dependencies 🧰
@@ -73,6 +73,7 @@ Local Sage is designed with minimal dependencies, keeping the download light and
 - [platformdirs](https://github.com/platformdirs/platformdirs) - Detects default directories across operating systems.
 - [pylatexenc](https://github.com/phfaist/pylatexenc) - Absolutely vital for live math sanitization.
 - [pyperclip](https://pypi.org/project/pyperclip/) - For copying code blocks to the system clipboard.
+- [trafilatura](https://pypi.org/project/trafilatura/) - For extracting text from web pages.
 
 ### File Locations 📁
 Your config file, session files, and error logs are stored in your user's data directory.
@@ -116,9 +117,10 @@ All usage charts are present below. You can render them within the CLI by typing
 | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the root prompt. Also acts as an immediate exit. |
 | **WARNING** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
 ---
-| **File Management** | *Commands for attaching and managing files* |
+| **Context Management** | *Manage context & attachments* |
 | --- | ----------- |
 | `!a` or `!attach` | Attaches a file to the current session. |
+| `!web` | Scrapes a website, and attaches the contents to the current session. |
 | `!attachments` | List all current attachments. |
 | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
 | `!purge all` | Purges all attachments from the current session. |
@@ -199,6 +201,8 @@ When a file is attached to a session, a wrapper is applied to the file contents 
 
 If you re-attach a file, context consumption is massively reduced by removing the entry containing the file contents from the session history and then appending the new copy. You can also completely remove a file from a session via the `!purge` command, which restores context spent.
 
+A similar wrapper is applied to website content. That means `!purge` can also be used to remove scraped website content from the conversation history.
+
 #### Automated Environment Awareness
 Your model is provided with basic environment context that mutates depending on the current working directory.
 
@@ -231,6 +235,12 @@ The project follows basic versioning:
 
 ## License ⚖️
 Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
+
+## AI Use 🤖
+
+> "I believe that a 'human-in-the-loop' is both an obligation and a necessity when working with AI. Local Sage was written under that belief."
+
+I use AI for theory-crafting, code review, and snippet generation. For example, most of the regex seen in `sage_math_sanitizer.py` was generated and tuned by iteratively prompting GPT 5.1 and then ran against a pytest suite to prevent regression. The architecture in `sage.py` is written and tuned by hand, and all documentation you see here is written by hand as well. This is NOT a 'vibe-coded' project.
 
 ## Closing Notes 🫵
 Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
