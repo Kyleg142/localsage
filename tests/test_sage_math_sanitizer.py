@@ -6,7 +6,7 @@ Focuses on core functionality, quirks, and odd output combinations.
 
 import pytest
 
-from localsage.sage_math_sanitizer import sanitize_math_safe
+from localsage.math_sanitizer import sanitize_math_safe
 
 # 1. Normalization & Pre-filtering Tests
 
