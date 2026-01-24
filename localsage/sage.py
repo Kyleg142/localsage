@@ -763,9 +763,10 @@ class UIConstructor:
             | `Ctrl + C` | Abort mid-stream, reset the turn, and return to the root prompt. Also acts as an immediate exit. |
             | **WARNING:** | Using `Ctrl + C` as an immediate exit does not trigger an autosave! |
 
-            | **File Management** | *Commands for attaching and managing files* |
+            | **File Management** | *Commands for attaching and managing attachments* |
             | --- | ----------- |
             | `!a` or `!attach` | Attaches a file to the current session. |
+            | `!web` | Scrapes a website, and attaches the contents to the current session. |
             | `!attachments` | List all current attachments. |
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
             | `!purge all` | Purges all attachments from the current session. |
