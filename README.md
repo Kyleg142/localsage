@@ -240,7 +240,7 @@ Local Sage is released under the [**MIT License**](https://opensource.org/licens
 
 > "I believe that a 'human-in-the-loop' is both an obligation and a necessity when working with AI. Local Sage was written under that belief."
 
-I use AI for theory-crafting, code review, and snippet generation. For example, most of the regex seen in `sage_math_sanitizer.py` was generated and tuned by iteratively prompting GPT 5.1 and then ran against a pytest suite to prevent regression. The architecture in `sage.py` is written and tuned by hand, and all documentation you see here is written by hand as well. This is NOT a 'vibe-coded' project.
+I use AI for theory-crafting, code review, and snippet generation. For example, most of the regex seen in `math_sanitizer.py` was generated and tuned by iteratively prompting GPT 5.1 and then ran against a pytest suite to prevent regression. The architecture of Local Sage is written and tuned by hand, and all documentation you see here is written by hand as well. This is NOT a 'vibe-coded' project.
 
 ## Closing Notes 🫵
 Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
