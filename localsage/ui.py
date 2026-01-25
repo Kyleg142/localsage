@@ -180,7 +180,7 @@ class UIConstructor:
 
             | **Context Management** | *Manage context & attachments* |
             | --- | ----------- |
-            | `!a` or `!attach` | Attaches a file to the current session. |
+            | `!a` or `!attach` | Attaches a file or directory to the current session. Child directories are not attached. |
             | `!web` | Scrapes a website, and attaches the contents to the current session. |
             | `!attachments` | List all current attachments. |
             | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
@@ -188,7 +188,7 @@ class UIConstructor:
             | `!cd` | Change the current working directory. |
             | `!cp` | Copy all code blocks from the last response. |
             | | |
-            | **FILE TYPES:** | All text-based file types are acceptable. |
+            | **FILE TYPES:** | All text-based file types are acceptable. No PDFs. |
             | **NOTE:** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
             """)
         )
