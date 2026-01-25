@@ -10,7 +10,7 @@ from prompt_toolkit.completion import (
 )
 from prompt_toolkit.validation import Validator
 
-from localsage.globals import FILE_PATTERN, SESSIONS_DIR, SITE_PATTERN
+from localsage.globals import DIR_PATTERN, FILE_PATTERN, SESSIONS_DIR, SITE_PATTERN
 
 
 class FileManager:
@@ -18,16 +18,6 @@ class FileManager:
 
     def __init__(self, session):
         self.session = session
-
-    def _file_validator(self, text: str) -> bool:
-        """File validation helper for file_validator()"""
-        # Boiled down to two lines, simply validates that a file exists
-        text = os.path.abspath(os.path.expanduser(text))
-        return os.path.isfile(text)
-
-    def _directory_validator(self, text: str) -> bool:
-        text = os.path.abspath(os.path.expanduser(text))
-        return os.path.isdir(text)
 
     def session_completer(self) -> WordCompleter:
         """Session completion helper for the session manager"""
@@ -37,20 +27,42 @@ class FileManager:
             sentence=True,
         )
 
-    def process_file(self, path: str) -> tuple[bool, int]:
-        """Processes a file for attachment"""
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            with open(path, "r", encoding="latin-1") as f:
-                content = f.read()
+    def process_file(self, path: str) -> tuple[bool, int] | None:
+        """Processes a file or directory for attachment"""
+        content = ""
+        wrapped = ""
+        path = os.path.abspath(os.path.expanduser(path))
+        basename = os.path.basename(path)
 
-        consumption = self.session.encode(content)
-        content = content.replace("```", "ʼʼʼ")
-        filename = os.path.basename(path)
-        wrapped = f"---\nFile: `{filename}`\n```\n{content}\n```\n---"
-        existing = [(i, t, n) for i, t, n in self.get_attachments() if n == filename]
+        def read_file(src: str) -> str:
+            try:
+                with open(src, "r", encoding="utf-8") as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                with open(src, "r", encoding="latin-1") as f:
+                    return f.read()
+
+        if os.path.isdir(path):
+            filelist = ""
+            for file in os.listdir(path):
+                src = os.path.join(path, file)
+                # Ignore hidden files
+                if os.path.isfile(src) and not file.startswith("."):
+                    filelist += file + " "
+                    content += f"File: `{file}`\n```\n{read_file(src)}\n```\n\n"
+            if filelist and content:
+                content = content.replace("```", "ʼʼʼ")
+                wrapped = f"---\nDirectory: `{basename}`\nFiles: `{filelist.strip()}`\n\n{content.strip()}\n---"
+            else:
+                return
+
+        elif os.path.isfile(path):
+            content = read_file(path)
+            content = content.replace("```", "ʼʼʼ")
+            wrapped = f"---\nFile: `{basename}`\n```\n{content.strip()}\n```\n---"
+
+        consumption = self.session.encode(wrapped)
+        existing = [(i, t, n) for i, t, n in self.get_attachments() if n == basename]
         is_update = False
 
         # If the file exists already in context, delete it.
@@ -58,7 +70,6 @@ class FileManager:
             index = existing[-1][0]
             self.session.remove_history(index)
             is_update = True
-        # Add the file's content to context, wrapped in Markdown for retrieval
         self.session.append_message("user", wrapped)
         return is_update, consumption
 
@@ -103,25 +114,39 @@ class FileManager:
             if isinstance(content, str):
                 match1 = FILE_PATTERN.match(content)
                 match2 = SITE_PATTERN.match(content)
+                match3 = DIR_PATTERN.match(content)
                 if match1:
-                    # Append each attachment to a new structured list
                     attachments.append((i, "file", match1.group(1)))
                 if match2:
                     attachments.append((i, "website", match2.group(1)))
+                if match3:
+                    attachments.append((i, "directory", match3.group(1)))
         return attachments
 
-    def file_validator(self) -> Validator:
+    def path_validator(self) -> Validator:
         """Prompt_toolkit file validator"""
+
+        def _validator(text: str) -> bool:
+            """Path validation helper for path_validator()"""
+            text = os.path.abspath(os.path.expanduser(text))
+            return os.path.isfile(text) or os.path.isdir(text)
+
         return Validator.from_callable(
-            self._file_validator,
-            error_message="Invalid file.",
+            _validator,
+            error_message="Invalid path.",
             move_cursor_to_end=True,
         )
 
     def dir_validator(self) -> Validator:
         """Prompt_toolkit directory validator"""
+
+        def _dir_validator(text: str) -> bool:
+            """Directory validation helper for dir_validator()"""
+            text = os.path.abspath(os.path.expanduser(text))
+            return os.path.isdir(text)
+
         return Validator.from_callable(
-            self._directory_validator,
+            _dir_validator,
             error_message="Invalid directory.",
             move_cursor_to_end=True,
         )

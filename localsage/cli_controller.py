@@ -447,11 +447,11 @@ class CLIController:
 
     # <~~FILE MANAGEMENT~~>
     def attach_file(self):
-        """Command structure for reading a file from disk"""
+        """Reads a file or directory from disk"""
         path = self._prompt_wrapper(
-            HTML("Enter file path<seagreen>:</seagreen> "),
+            HTML("Enter file/directory path<seagreen>:</seagreen> "),
             completer=PathCompleter(expanduser=True),
-            validator=self.filemanager.file_validator(),
+            validator=self.filemanager.path_validator(),
             validate_while_typing=False,
             style=COMPLETER_STYLER,
             history=self.filepath_history,
@@ -459,26 +459,11 @@ class CLIController:
         if not path:
             return
 
-        # Normalize path input and check file size
-        path = os.path.abspath(os.path.expanduser(path))
-        max_size = 1_000_000  # 1 MB
-        file_size = os.path.getsize(path)
-        if file_size > max_size:
-            CONSOLE.print(
-                f"[yellow]Warning:[/yellow] File is {file_size / 1_000_000:.2f} MB and may consume a large amount of context."
-            )
-            choice = self._prompt_wrapper(
-                HTML("Attach anyway? (<seagreen>y</seagreen>/<ansired>N</ansired>): "),
-                allow_empty=True,
-            )
-            if not choice:
-                return
-            if choice.lower() not in ("y", "yes"):
-                CONSOLE.print("[dim]Attachment canceled.[/dim]\n")
-                return
-
         try:
             file = self.filemanager.process_file(path)
+            if not file:
+                CONSOLE.print("[dim]No files found to attach.[/dim]\n")
+                return
             is_update = file[0]
             filename = os.path.basename(path)
             consumption = (file[1] / self.config.context_length) * 100
@@ -489,6 +474,10 @@ class CLIController:
             else:
                 CONSOLE.print(
                     f"{filename} [green]attached successfully.[/green]\n[yellow]Context size:[/yellow] {file[1]}, {consumption:.1f}%"
+                )
+            if consumption > 50:
+                CONSOLE.print(
+                    "[dim]Large payload detected! Use [cyan]!purge[/cyan], if needed, to recover context."
                 )
             self.panel.spawn_status_panel(toks=False)
         except Exception as e:
@@ -510,7 +499,7 @@ class CLIController:
         CONSOLE.print()
 
     def purge_attachment(self):
-        """Purges files/images from context and recovers context length"""
+        """Purges an attachment from context and recovers context length"""
         attachments = self.filemanager.get_attachments()
         if not attachments:
             CONSOLE.print("[dim]No attachments found.[/dim]\n")
@@ -533,7 +522,7 @@ class CLIController:
                     CONSOLE.print("[dim]Value must be greater than 0.[/dim]\n")
                     return
             except ValueError:
-                CONSOLE.print("[dim]Only valid entry numbers are acceptable[/dim]\n")
+                CONSOLE.print("[dim]Only valid entry numbers are acceptable.[/dim]\n")
                 return
         else:
             return
@@ -585,16 +574,12 @@ class CLIController:
             assistant_msg = msg["content"]  # pyright: ignore | can safely assume content always exists for assistant entries
 
         if not assistant_msg:
-            CONSOLE.print(
-                "[yellow]No assistant response found to copy from.[/yellow]\n"
-            )
+            CONSOLE.print("[dim]No assistant response found to copy from.[/dim]\n")
             return
 
         blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", assistant_msg, re.DOTALL)
         if not blocks:
-            CONSOLE.print(
-                "[yellow]No code blocks found in the last response.[/yellow]\n"
-            )
+            CONSOLE.print("[dim]No code blocks found in the last response.[/dim]\n")
             return
 
         code = "\n\n".join(blocks).strip()
