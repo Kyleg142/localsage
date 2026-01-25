@@ -1,6 +1,25 @@
+### v1.4.2
+
+**New:** Directory attachment, `!a` and `!attach` can now be used on directories. `!purge` can also be used to remove attached directories.
+
+**Architecture:**
+The entirety of `sage.py` has been broken up into modules, which consists of...
+- cli_controller.py
+- config.py
+- file_manager.py
+- globals.py
+- math_sanitizer.py
+- sage.py
+- session_manager.py
+- ui.py
+
+Structurally and functionally, everything is the same. Certain classes are just isolated in standalone files now.
+
+---
+
 ### v1.4.1
 
-**New Features**
+**New:**
 - Web scraping! Websites can now be scraped and appended to history by using the `!web` command. `!purge` can also be used to remove attached website content.
 - Sliding context window. Session history is now automatically truncated when exceeding 95% context consumption.
 
