@@ -119,7 +119,7 @@ All usage charts are present below. You can render them within the CLI by typing
 ---
 | **Context Management** | *Manage context & attachments* |
 | --- | ----------- |
-| `!a` or `!attach` | Attaches a file to the current session. |
+| `!a` or `!attach` | Attaches a file or directory to the current session. Child directories are not attached. |
 | `!web` | Scrapes a website, and attaches the contents to the current session. |
 | `!attachments` | List all current attachments. |
 | `!purge` | Choose a specific attachment and purge it from the session. Recovers context length. |
