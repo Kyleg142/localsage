@@ -23,7 +23,7 @@ Featuring **live Markdown rendering with inline math conversion** for a *silky s
   *Example*: `ps aux | localsage "What process is consuming the most memory?"`
 - **Fancy Prompts**: Command completion, path completion, and in-memory history for a shell-native UX.
 - **Website Scraping**: Scrape a website with a simple command, and attach it's contents to the current session.
-- **Context-aware File Management**: Files are replaced on re-attachment and can be purged from a session, restoring context.\
+- **Context-aware File Management**: Attachments are replaced on re-attachment and can be purged from a session, restoring context.\
   *Note*: Attached website content can be purged from a session as well.
 - **Automated Environment Awareness**: Your model sees your username, your OS name, and the contents of your current working directory.
 - **Session Management**: Load, save, delete, reset, and summarize sessions.
