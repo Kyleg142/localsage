@@ -185,7 +185,7 @@ class SessionManager:
 
         if processed_history and processed_history[0]["role"] == "system":
             processed_history[0]["content"] = (
-                f"{processed_history[0]['content']}\n\n{self.get_environment()}"
+                f"{self.config.system_prompt}\n\n{self.get_environment()}"
             )
 
         return processed_history
