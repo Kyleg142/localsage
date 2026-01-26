@@ -412,18 +412,18 @@ class App:
         if not sys.stdin.isatty():
             piped_content: str = sys.stdin.read().strip()
             if piped_content:
-                wrapped = f"[PIPED CONTENT]\n{piped_content}"
-                if len(sys.argv) > 1:
-                    user_query = " ".join(sys.argv[1:])
-                    wrapped += f"\n\n[USER QUERY]\n{user_query}"
-                self.session_manager.append_message("user", wrapped)
+                if not self.session_manager.pipe_wrapper(piped_content):
+                    CONSOLE.print(
+                        "[bold red]ABORTED:[/bold red] [red]Piped content exceeded the context window!/red]\n"
+                        "[dim]Try piping a smaller snippet or increasing your context length.[dim]\n"
+                    )
+                    sys.exit(1)
                 self.chat.stream_response()
+
                 try:
                     sys.stdin = open("/dev/tty" if os.name != "nt" else "CONIN$", "r")
                 except Exception:
-                    CONSOLE.print(
-                        "[dim]Cannot re-attach to the active terminal. Exiting gracefully...[/dim]"
-                    )
+                    CONSOLE.print("[dim]Cannot re-attach to terminal. Exiting...[/dim]")
                     sys.exit(0)
 
         # Start REPL
