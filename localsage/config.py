@@ -24,7 +24,7 @@ class Config:
         self.refresh_rate: int = 30
         self.rich_code_theme: str = "monokai"
         self.reasoning_panel_consume: bool = True
-        self.system_prompt: str = "You are Sage, a conversational AI assistant."
+        self.system_prompt: str = "You are Sage, a professional CLI assistant."
 
     def active(self) -> dict:
         """Return the currently active model profile."""
