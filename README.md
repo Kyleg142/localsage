@@ -127,7 +127,7 @@ All usage charts are present below. You can render them within the CLI by typing
 | `!purge all` | Purges all attachments from the current session. |
 | `!cd` | Change the current working directory. |
 | `!cp` | Copy all code blocks from the last response. |
-| **FILE TYPES** | All text-based file types are acceptable. No PDFs. |
+| **FILE TYPES** | All text-based file types are acceptable. No PDFS. |
 | **NOTE** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
 
 ## Docker 🐋
@@ -197,7 +197,7 @@ A monospaced Nerd font is **HIGHLY** recommended. It ensures that Markdown, math
 
 ## Under the Hood 🛠️
 
-#### Context-Aware File Management
+#### Context-Aware Attachment
 When a file (or directory) is attached to a session, a wrapper is applied to the contents before being appended to the session history. This wrapper enables attachment detection via regex, for file management.
 
 If you re-attach a file, context consumption is massively reduced by removing the entry containing the file contents from the session history and then appending the new copy. You can also completely remove a file from a session via the `!purge` command, which restores context spent.
@@ -239,9 +239,9 @@ Local Sage is released under the [**MIT License**](https://opensource.org/licens
 
 ## AI Use 🤖
 
-> "I believe that a 'human-in-the-loop' is both an obligation and a necessity when working with AI. Local Sage was written under that belief."
+> "I believe that a human-in-the-loop is both an obligation and a necessity when working with AI. Local Sage was written under that belief."
 
-I use AI for theory-crafting, code review, and snippet generation. For example, most of the regex seen in `sage_math_sanitizer.py` was generated and tuned by iteratively prompting GPT 5.1 and then ran against a pytest suite to prevent regression. The architecture in `sage.py` is written and tuned by hand, and all documentation you see here is written by hand as well. This is NOT a 'vibe-coded' project.
+I use AI for theory-crafting, code review, and snippet generation. For example, most of the regex seen in `math_sanitizer.py` was generated and tuned by iteratively prompting GPT 5.1 and then ran against a pytest suite to prevent regression. The architecture in `sage.py` is written and tuned by hand, and all documentation you see here is written by hand as well. This is NOT a 'vibe-coded' project.
 
 ## Closing Notes 🫵
 Local Sage is an **open-source, single-dev project** built purely for the love of the game. Please be kind!
