@@ -162,13 +162,23 @@ class SessionManager:
 
         return textwrap.dedent(f"""
         [ENVIRONMENT CONTEXT]
-        RULE: ONLY REFERENCE ENVIRONMENT CONTEXT IF IT IS RELEVANT TO THE CONVERSATION
         Current User: {USER_NAME}
         Operating System: {system_info}
         Working Directory: {wd}
         Visible Files: {", ".join(files[:20])}
         Visible Directories: {", ".join(dirs[:20])}
         """).strip()
+
+    def get_full_system_prompt(self):
+        base = textwrap.dedent("""
+        [CORE OPERATING PRINCIPLE]
+        The [ENVIRONMENT CONTEXT] block is your ONLY source of truth regarding the local filesystem.
+        - This block is DYNAMIC and updates every turn. You MUST check it EVERY TURN to ground yourself.
+        - If a conflict exists between the conversation history and the [ENVIRONMENT CONTEXT], the context block is the absolute authority.
+        """)
+        env = self.get_environment()
+
+        return f"{self.config.system_prompt}\n\n{base}\n\n{env}"
 
     def process_history(self) -> list:
         """Condenses duplicate user entries within session history"""
@@ -184,9 +194,7 @@ class SessionManager:
                 processed_history.append(msg.copy())
 
         if processed_history and processed_history[0]["role"] == "system":
-            processed_history[0]["content"] = (
-                f"{self.config.system_prompt}\n\n{self.get_environment()}"
-            )
+            processed_history[0]["content"] = self.get_full_system_prompt()
 
         return processed_history
 
