@@ -39,6 +39,132 @@ FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
 DIR_PATTERN = re.compile(r"^---\nDirectory: `(.*?)`", re.MULTILINE)
 SITE_PATTERN = re.compile(r"^---\nWebsite: `(.*?)`", re.MULTILINE)
 
+# Restricted file types that are not compatible with text-based assistants
+RESTRICTED_FILES = (
+    # Images
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".ico",
+    ".tiff",
+    ".webp",
+    ".heic",
+    ".raw",
+    ".psd",
+    ".ai",
+    ".xcf",
+    ".svg",  # svg is XML, but it is awful to feed to an LLM, too much noise
+    # Audio/Video
+    ".mp4",
+    ".mkv",
+    ".mov",
+    ".mp3",
+    ".wav",
+    ".flac",
+    ".aac",
+    ".m4a",
+    ".webm",
+    ".avi",
+    ".wmv",
+    ".wma",
+    # Archives & Compressed
+    ".zip",
+    ".tar",
+    ".gz",
+    ".7z",
+    ".rar",
+    ".iso",
+    ".jar",
+    ".tgz",
+    ".bz2",
+    ".xz",
+    ".cab",
+    ".z",
+    ".lz4",
+    ".zst",
+    # Installers & Packages
+    ".dmg",
+    ".pkg",
+    ".deb",
+    ".rpm",
+    ".msi",
+    ".msix",
+    ".apk",
+    ".war",
+    ".ear",
+    # Executables & Compiled Bytecode
+    ".exe",
+    ".dll",
+    ".so",
+    ".bin",
+    ".o",
+    ".obj",
+    ".pyc",
+    ".pyo",
+    ".pyd",
+    ".class",
+    ".dylib",
+    ".elf",
+    ".wasm",
+    ".node",
+    # AI & Big Data
+    ".onnx",
+    ".tflite",
+    ".pth",
+    ".h5",
+    ".ckpt",
+    ".pt",
+    ".safetensors",
+    ".parquet",
+    ".arrow",
+    ".npy",
+    ".npz",
+    ".pickle",
+    ".pkl",
+    # Documents & Ebooks
+    ".pdf",
+    ".epub",
+    ".mobi",
+    ".djvu",
+    # Zipped XML
+    ".docx",
+    ".xlsx",
+    ".pptx",
+    ".odt",
+    ".ods",
+    ".odp",
+    # Legacy Extensions
+    ".doc",
+    ".xls",
+    ".ppt",
+    # Fonts
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".eot",
+    ".cur",
+    ".ani",
+    # Databases & Virtualization
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".mdb",
+    ".accdb",
+    ".vdi",
+    ".vmdk",
+    ".qcow2",
+    ".ova",
+    ".img",
+    # System Metadata & Logs
+    ".ds_store",
+    "thumbs.db",
+    ".swp",
+    ".journal",  # Systemd binary logs
+)
+
 # Terminal integration
 CONSOLE = Console()
 
@@ -162,6 +288,7 @@ def retrieve_key() -> str:
 
 
 def spinner_constructor(content: str) -> Spinner:
+    """Returns a themed Rich spinner."""
     return Spinner(
         "moon",
         text=f"[bold medium_orchid]{content}[/bold medium_orchid]",
@@ -169,6 +296,7 @@ def spinner_constructor(content: str) -> Spinner:
 
 
 def root_prompt() -> str:
+    """Returns the root prompt"""
     return prompt(
         PROMPT_PREFIX,
         completer=COMMAND_COMPLETER,

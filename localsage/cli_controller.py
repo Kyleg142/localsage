@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sys
+import textwrap
 
 import pyperclip
 from keyring import set_password
@@ -260,13 +261,13 @@ class CLIController:
         name = self._prompt_wrapper(HTML("Model name<seagreen>:</seagreen> "))
         if not name:
             return
-        CONSOLE.print("[yellow]Format:[/yellow] https://ipaddress:port/v1")
+        CONSOLE.print("[yellow]Format:[/yellow] http://ipaddress:port/v1")
         endpoint = self._prompt_wrapper(HTML("API endpoint<seagreen>:</seagreen> "))
         if not endpoint:
             return
 
         if any(m["alias"] == alias for m in self.config.models):
-            CONSOLE.print(f"[red]Profile[/red] '{alias}' [red]already exists.[/red]\n")
+            CONSOLE.print(f"[dim]Profile[/dim] '{alias}' [dim]already exists.[/dim]\n")
             return
 
         self.config.models.append(
@@ -290,7 +291,7 @@ class CLIController:
             return
 
         if alias == self.config.active_model:
-            CONSOLE.print("[red]The active profile cannot be removed.[/red]\n")
+            CONSOLE.print("[dim]The active profile cannot be removed.[/dim]\n")
             return
 
         before = len(self.config.models)
@@ -299,7 +300,7 @@ class CLIController:
             self.config.save()
             CONSOLE.print(f"[green]Profile[/green] '{alias}' [green]removed.[/green]\n")
         else:
-            CONSOLE.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
+            CONSOLE.print(f"[dim]No profile found under alias[/dim] '{alias}'.\n")
 
     def switch_model(self) -> tuple[OpenAI, str] | None:
         """Switch active model profile by alias."""
@@ -312,7 +313,7 @@ class CLIController:
 
         match = next((m for m in self.config.models if m["alias"] == alias), None)
         if not match:
-            CONSOLE.print(f"[red]No profile found under alias[/red] '{alias}'.\n")
+            CONSOLE.print(f"[dim]No profile found under alias[/dim] '{alias}'.\n")
             return
 
         self.config.active_model = alias
@@ -462,11 +463,13 @@ class CLIController:
         try:
             file = self.filemanager.process_file(path)
             if not file:
-                CONSOLE.print("[dim]No files found to attach.[/dim]\n")
+                CONSOLE.print(
+                    "[dim]Skipped: Source is empty, binary, or contains hidden content.[/dim]\n"
+                )
                 return
             is_update = file[0]
-            filename = os.path.basename(path)
             consumption = (file[1] / self.config.context_length) * 100
+            filename = file[2] or os.path.basename(path)
             if is_update:
                 CONSOLE.print(
                     f"{filename} [green]updated successfully.[/green]\n[yellow]Context size:[/yellow] {file[1]}, {consumption:.1f}%"
@@ -568,21 +571,21 @@ class CLIController:
     def copy_last_snippet(self):
         """Copies all Markdown code blocks from the last assistant message"""
 
-        assistant_msg: str = ""
-        msg = self.session.history[-1]
-        if msg["role"] == "assistant":
-            assistant_msg = msg["content"]  # pyright: ignore | can safely assume content always exists for assistant entries
-
+        assistant_msg = self.session.return_assistant_msg()
         if not assistant_msg:
             CONSOLE.print("[dim]No assistant response found to copy from.[/dim]\n")
             return
 
-        blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", assistant_msg, re.DOTALL)
+        # blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", assistant_msg, re.DOTALL) | Old regex
+        pattern = r"```[^\S\n]*\w*[^\S\n]*\n(.*?)\n[^\S\n]*```"
+        blocks = re.findall(pattern, assistant_msg, re.DOTALL)
+
         if not blocks:
             CONSOLE.print("[dim]No code blocks found in the last response.[/dim]\n")
             return
 
-        code = "\n\n".join(blocks).strip()
+        code = "\n\n".join(textwrap.dedent(b) for b in blocks).strip()
+
         try:
             pyperclip.copy(code)
             self.panel.spawn_copy_panel(code)

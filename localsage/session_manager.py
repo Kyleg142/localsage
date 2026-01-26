@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import sys
 import textwrap
 
 import tiktoken
@@ -202,3 +203,25 @@ class SessionManager:
                 if removed_item is not None:
                     tokens -= removed_item[1]
             self.history.pop(1)
+
+    def return_assistant_msg(self) -> str | None:
+        """Returns the last assistant message detected in history"""
+        for msg in reversed(self.history):
+            if msg["role"] == "assistant":
+                assistant_msg = msg.get("content", "")
+                if isinstance(assistant_msg, str or None):
+                    return assistant_msg
+
+    def pipe_wrapper(self, piped_content: str):
+        wrapped = f"[PIPED CONTENT]\n{piped_content}"
+        if len(sys.argv) > 1:
+            user_query = " ".join(sys.argv[1:])
+            wrapped += f"\n\n[USER QUERY]\n{user_query}"
+        self.append_message("user", wrapped)
+        toks = self.count_tokens()
+        current_count = toks[0] if isinstance(toks, tuple) else toks
+
+        if current_count > int(self.config.context_length * 0.95):
+            return False
+
+        return True

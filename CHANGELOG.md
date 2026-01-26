@@ -1,3 +1,14 @@
+### v1.4.3
+
+This is mostly an optimization and refinement update, to shore up some feature quirks.
+
+**Techinical Improvements**
+- Copying code blocks is now far more robust. Model output quirks are now taken into consideration.
+- File attachment has been optimized. A filter is now in place so that directories can be attached without the risk of attaching an unsupported file type.
+- The CLI now exits with a descriptive message if piped content exceeds the configured context window.
+
+---
+
 ### v1.4.2
 
 **New:** Directory attachment, `!a` and `!attach` can now be used on directories. `!purge` can also be used to remove attached directories.
