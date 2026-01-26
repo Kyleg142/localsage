@@ -418,7 +418,13 @@ class App:
                     wrapped += f"\n\n[USER QUERY]\n{user_query}"
                 self.session_manager.append_message("user", wrapped)
                 self.chat.stream_response()
-                sys.stdin = open("/dev/tty" if os.name != "nt" else "CONIN$", "r")
+                try:
+                    sys.stdin = open("/dev/tty" if os.name != "nt" else "CONIN$", "r")
+                except Exception:
+                    CONSOLE.print(
+                        "[dim]Cannot re-attach to the active terminal. Exiting gracefully...[/dim]"
+                    )
+                    sys.exit(0)
 
         # Start REPL
         while True:
