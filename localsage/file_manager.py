@@ -10,7 +10,13 @@ from prompt_toolkit.completion import (
 )
 from prompt_toolkit.validation import Validator
 
-from localsage.globals import DIR_PATTERN, FILE_PATTERN, SESSIONS_DIR, SITE_PATTERN
+from localsage.globals import (
+    DIR_PATTERN,
+    FILE_PATTERN,
+    RESTRICTED_FILES,
+    SESSIONS_DIR,
+    SITE_PATTERN,
+)
 
 
 class FileManager:
@@ -27,51 +33,56 @@ class FileManager:
             sentence=True,
         )
 
-    def process_file(self, path: str) -> tuple[bool, int] | None:
+    def process_file(self, path: str) -> tuple[bool, int, str] | None:
         """Processes a file or directory for attachment"""
-        content = ""
-        wrapped = ""
+        content_blocks: list[str] = []
+        filelist: list[str] = []
+
         path = os.path.abspath(os.path.expanduser(path))
         basename = os.path.basename(path)
 
         def read_file(src: str) -> str:
             try:
                 with open(src, "r", encoding="utf-8") as f:
-                    return f.read()
+                    return f.read().replace("```", "'''")
             except UnicodeDecodeError:
                 with open(src, "r", encoding="latin-1") as f:
-                    return f.read()
+                    return f.read().replace("```", "'''")
 
         if os.path.isdir(path):
-            filelist = ""
-            for file in os.listdir(path):
-                src = os.path.join(path, file)
-                # Ignore hidden files
-                if os.path.isfile(src) and not file.startswith("."):
-                    filelist += file + " "
-                    content += f"File: `{file}`\n```\n{read_file(src)}\n```\n\n"
-            if filelist and content:
-                content = content.replace("```", "ʼʼʼ")
-                wrapped = f"---\nDirectory: `{basename}`\nFiles: `{filelist.strip()}`\n\n{content.strip()}\n---"
-            else:
+            with os.scandir(path) as entries:
+                for file in entries:
+                    if (
+                        file.is_file()
+                        and not file.name.startswith(".")
+                        and not file.name.endswith(RESTRICTED_FILES)
+                    ):
+                        filelist.append(file.name)
+                        content_blocks.append(
+                            f"File: `{file.name}`\n```\n{read_file(file.path)}\n```"
+                        )
+            if not filelist:
                 return
-
-        elif os.path.isfile(path):
-            content = read_file(path)
-            content = content.replace("```", "ʼʼʼ")
-            wrapped = f"---\nFile: `{basename}`\n```\n{content.strip()}\n```\n---"
+            formatted = ", ".join(filelist)
+            content = "\n\n".join(content_blocks)
+            wrapped = (
+                f"---\nDirectory: `{basename}`\nFiles: `{formatted}`\n\n{content}\n---"
+            )
+        elif os.path.isfile(path) and not path.endswith(RESTRICTED_FILES):
+            formatted = ""
+            wrapped = f"---\nFile: `{basename}`\n```\n{read_file(path)}\n```\n---"
+        else:
+            return
 
         consumption = self.session.encode(wrapped)
-        existing = [(i, t, n) for i, t, n in self.get_attachments() if n == basename]
-        is_update = False
 
         # If the file exists already in context, delete it.
+        existing = [(i, t, n) for i, t, n in self.get_attachments() if n == basename]
         if existing:
-            index = existing[-1][0]
-            self.session.remove_history(index)
-            is_update = True
+            self.session.remove_history(existing[-1][0])
+
         self.session.append_message("user", wrapped)
-        return is_update, consumption
+        return bool(existing), consumption, formatted
 
     def process_website(self, url: str) -> int:
         """Processes a website for attachment (uses trafilatura)"""
