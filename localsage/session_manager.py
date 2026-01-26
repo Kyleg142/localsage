@@ -202,3 +202,11 @@ class SessionManager:
                 if removed_item is not None:
                     tokens -= removed_item[1]
             self.history.pop(1)
+
+    def return_assistant_msg(self) -> str | None:
+        """Returns the last assistant message detected in history"""
+        for msg in reversed(self.history):
+            if msg["role"] == "assistant":
+                assistant_msg = msg.get("content", "")
+                if isinstance(assistant_msg, str or None):
+                    return assistant_msg
