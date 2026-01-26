@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg">
 </p>
 
-<p align="center"><b>A 'human-in-the-loop' LLM interface that embraces the command line.</b></p>
+<p align="center"><b>A human-in-the-loop LLM interface that embraces the command line.</b></p>
 
 <p align="center"><img width="1200" alt="Local Sage Demo" src="https://raw.githubusercontent.com/Kyleg142/localsage/main/assets/localsagedemo.gif"></p>
 
@@ -23,9 +23,10 @@ Featuring **live Markdown rendering with inline math conversion** for a *silky s
   *Example*: `ps aux | localsage "What process is consuming the most memory?"`
 - **Fancy Prompts**: Command completion, path completion, and in-memory history for a shell-native UX.
 - **Website Scraping**: Scrape a website with a simple command, and attach it's contents to the current session.
-- **Context-aware File Management**: Attachments are replaced on re-attachment and can be purged from a session, restoring context.\
-  *Note*: Attached website content can be purged from a session as well.
-- **Automated Environment Awareness**: Your model sees your username, your OS name, and the contents of your current working directory.
+- **Context-aware Attachment**: Attachments are replaced on re-attachment and can be purged from a session, restoring context.\
+  *Note*: Entire directories can be attached at once. Attached website content can be purged from a session as well.
+- **Automated Environment Context**: Your model sees your username, your OS name, and the contents of your current working directory.\
+  *Note*: When changing the working directory with the `!cd` command, your model is aware. Environment context mutates.
 - **Session Management**: Load, save, delete, reset, and summarize sessions.
 - **Profile Management**: Save, delete, and switch model profiles.
 - **Context & Throughput Monitoring**: Shown through a subtle status panel.
@@ -197,7 +198,7 @@ A monospaced Nerd font is **HIGHLY** recommended. It ensures that Markdown, math
 ## Under the Hood 🛠️
 
 #### Context-Aware File Management
-When a file is attached to a session, a wrapper is applied to the file contents before being appended to the session history. This wrapper enables attachment detection via regex, for file management.
+When a file (or directory) is attached to a session, a wrapper is applied to the contents before being appended to the session history. This wrapper enables attachment detection via regex, for file management.
 
 If you re-attach a file, context consumption is massively reduced by removing the entry containing the file contents from the session history and then appending the new copy. You can also completely remove a file from a session via the `!purge` command, which restores context spent.
 
@@ -230,8 +231,8 @@ Once the live panel group fills the terminal viewport, real-time rendering canno
 
 ## Versioning 🔧
 The project follows basic versioning:
-- **1.0.x** - Minor patches consisting of bug fixes and aesthetic tweaks.
-- **1.x.0** - Major patches consisting of feature expansions or necessary refactors.
+- **1.0.x** - Minor patches consisting of bug fixes and tweaks
+- **1.x.0** - Major patches consisting of large feature expansions or necessary refactors.
 
 ## License ⚖️
 Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
