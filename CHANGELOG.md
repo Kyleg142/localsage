@@ -1,3 +1,18 @@
+### v1.4.5
+
+**Technical Improvements**
+- Website attachment has been reinforced with a new robust ingestion pipeline. Github links are automatically converted to their raw equivalent for context injection when possible. Same with Pastebin links and GitLab links.
+- Each release is now published to Docker Hub. The README has been updated with new instructions for running the CLI in Docker.
+- Automated Environment Context should now be far more reliable when changing the working directory with `!cd`.
+
+---
+
+### v1.4.4 - Hotfix
+
+Corrected a string accumulation bug that was affecting environment context.
+
+---
+
 ### v1.4.3
 
 This is mostly an optimization and refinement update, to shore up some feature quirks.
@@ -35,6 +50,8 @@ Structurally and functionally, everything is the same. Certain classes are just 
 - Sliding context window. Session history is now automatically truncated when exceeding 95% context consumption.
 
 **UX**: Attachments are now removed by index, rather than by name. Index is now included when listing attachments.
+
+---
 
 ### v1.4.0
 
