@@ -560,6 +560,10 @@ class CLIController:
 
         try:
             os.chdir(os.path.abspath(os.path.expanduser(path)))
+            self.session.append_message(
+                "user",
+                f"[SYSTEM NOTE: The working directory has changed to {os.getcwd()}. New content is visible in [ENVIRONMENT CONTEXT].]",
+            )
             CONSOLE.print(
                 f"[green]Working directory is now set to:[/green] [cyan]{path}[/cyan]\n"
             )
@@ -609,7 +613,7 @@ class CLIController:
                 site = self.filemanager.process_website(url)
                 consumption = (site / self.config.context_length) * 100
             except Exception as e:
-                CONSOLE.print(f"[red]Failed to fetch URL:[/red] {e}\n")
+                self.panel.spawn_error_panel("FAILED TO FETCH URL", f"{e}")
                 return
             CONSOLE.print(
                 f"[green]Successfully ingested[/green] {url}\n[yellow]Context size:[/yellow] {site}, {consumption:.1f}%"

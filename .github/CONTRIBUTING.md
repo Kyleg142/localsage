@@ -32,9 +32,5 @@ The CI pipeline **will enforce** passing tests. Before submitting, please ensure
 pytest
 ```
 
-The pipeline consists of:
-- **test_sage_math_santizer.py**: Logic verification.
-- Testing coming soon for **sage.py**. The main CLI just went through an architectural refactor.
-
 ## In Summary...
 Run `ruff`, `pyright`, and `pytest`. If all pass, you are golden! Open a PR and it will be reviewed.

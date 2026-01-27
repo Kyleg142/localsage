@@ -36,7 +36,6 @@ os.makedirs(LOG_DIR, exist_ok=True)
 # Compiled regex used in the context management system
 # Alternative, allows whitespace: ^---\s*File:\s*(.+?)
 FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
-DIR_PATTERN = re.compile(r"^---\nDirectory: `(.*?)`", re.MULTILINE)
 SITE_PATTERN = re.compile(r"^---\nWebsite: `(.*?)`", re.MULTILINE)
 
 # Restricted file types that are not compatible with text-based assistants
@@ -164,6 +163,92 @@ RESTRICTED_FILES = (
     ".swp",
     ".journal",  # Systemd binary logs
 )
+
+# Filter for attaching text files via html
+WEB_FILES = (
+    # Web & Frontend
+    ".html",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".vue",
+    ".svelte",
+    ".astro",
+    ".graphql",
+    ".gql",
+    # Systems & Logic
+    ".py",
+    ".pyi",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cc",
+    ".hh",
+    ".cs",
+    ".java",
+    ".rb",
+    ".php",
+    ".swift",
+    ".m",
+    ".mm",
+    ".kt",
+    ".kts",
+    ".dart",
+    ".rs",
+    ".go",
+    ".zig",
+    ".lua",
+    ".pl",
+    ".pm",
+    ".hs",
+    ".erl",
+    ".ex",
+    ".exs",
+    ".sql",
+    # Shell & Scripts
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".ps1",
+    ".bat",
+    ".cmd",
+    ".awk",
+    # Config & Data
+    ".json",
+    ".jsonl",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".conf",
+    ".env",
+    ".xml",
+    ".csv",
+    ".tsv",
+    ".proto",
+    ".tf",
+    ".tfvars",
+    # Documentation & Meta
+    ".txt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".log",
+    ".diff",
+    ".patch",
+    ".gitignore",
+    ".dockerignore",
+    ".editorconfig",
+)
+
+SPECIAL_FILES = ("dockerfile", "makefile", "procfile", "gemfile", "license")
+
 
 # Terminal integration
 CONSOLE = Console()

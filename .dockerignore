@@ -5,6 +5,7 @@ README.md
 CHANGELOG.md
 LICENSE
 assets/
+tools/
 
 # Python stuff
 __pycache__/
@@ -30,6 +31,7 @@ htmlcov/
 .cache/
 nosetests.xml
 coverage.xml
+tests/
 
 # Virtual environments
 .venv/
