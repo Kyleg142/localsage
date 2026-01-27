@@ -41,6 +41,8 @@ The big three (**Linux, macOS,** and **Windows**) are all supported. Ensure your
 
 You can use non-local models with Local Sage if desired. If you set an API key, the CLI will store it safely in your OS's built-in credential manager via **keyring**. Setting the `OPENAI_API_KEY` environment variable works as well, and overrides all other options.
 
+Each release is automatically published to Docker Hub. You can view instructions for running the CLI in Docker [here](#docker-).
+
 ## Installation 💽
 Install a Python package manager for your OS. Both [**uv**](https://github.com/astral-sh/uv) and [**pipx**](https://github.com/pypa/pipx) are highly recommended.
 
@@ -131,55 +133,21 @@ All usage charts are present below. You can render them within the CLI by typing
 | **NOTE** | If you ever attach a problematic file, `!purge` can be used to rescue the session. |
 
 ## Docker 🐋
-This is a general guide for running Local Sage in a Docker container. The `docker` commands below are suggested templates, feel free to edit them as necessary.
-
-A bash script, `containerize.sh`, is available to Linux & macOS users for convenient dockerization. You may have to run it with elevated permissions.
-
-Start by creating and setting a working directory.
-
-**If you'd like to use the script, perform the following:**
+**Pulling from Docker Hub and running the container:**
 ```bash
-# 1) Clone the repo:
-git clone https://github.com/Kyleg142/localsage
+# Download the image
+docker pull kyleg142/localsage
 
-# 2) Build the image:
-chmod u+x containerize.sh
-./containerize.sh build
-
-# 3) Run the container with sane defaults:
-./containerize.sh run
-```
-###### Or, if you run a non-containerized backend/API on the same machine:
-```bash
-./containerize.sh run local
-```
-The script stores persistent files in `/var/lib/LocalSage`.
-
-**Dockerizing Local Sage manually:**
-```bash
-# 1) Clone the repo:
-git clone https://github.com/Kyleg142/localsage
-
-# 2) Build the image
-docker image build -t python-localsage .
-
-# 3) Run the container
-docker run -it --rm \     
-  --name localsage \ 
+# Run the container, '-e OPENAI_API_KEY' is optional
+docker run -it --rm \
+  -v /pick/a/data/directory:/root/.local/share/LocalSage \
   -e OPENAI_API_KEY \
-  -v /home/<YourUsername>/.local/share/LocalSage:/root/.local/share/LocalSage \
-  python-localsage
+  kyleg142/localsage
 ```
-###### For Windows users, here is the equivalent `docker run` command in PowerShell:
-```powershell
-docker run -it --rm `
-  --name localsage `
-  -e OPENAI_API_KEY `
-  -v "${env:LOCALAPPDATA}/LocalSage:/root/.local/share/LocalSage" `
-  python-localsage
-```
+> Piping is not supported when running Local Sage in a container.
+
 ### Notes on Networking
-You may have to add specific options to your `docker run` command if you are running a non-containerized backend/API on the same machine. `./containerize.sh run local` applies these options automatically. 
+You may have to add specific options to your `docker run` command if you are running a non-containerized backend/API on the same machine.
 
 **Local Linux**
 1) Add `--network host` to your `docker run` options to allow the container to reach services on localhost.
@@ -238,8 +206,6 @@ The project follows basic versioning:
 Local Sage is released under the [**MIT License**](https://opensource.org/license/mit).
 
 ## AI Use 🤖
-
-> "I believe that a human-in-the-loop is both an obligation and a necessity when working with AI. Local Sage was written under that belief."
 
 I use AI for theory-crafting, code review, and snippet generation. For example, most of the regex seen in `math_sanitizer.py` was generated and tuned by iteratively prompting GPT 5.1 and then ran against a pytest suite to prevent regression. The architecture of Local Sage is written and tuned by hand, and all documentation you see here is written by hand as well. This is NOT a 'vibe-coded' project.
 
