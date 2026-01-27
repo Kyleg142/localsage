@@ -165,6 +165,92 @@ RESTRICTED_FILES = (
     ".journal",  # Systemd binary logs
 )
 
+# Filter for attaching text files via html
+WEB_FILES = (
+    # Web & Frontend
+    ".html",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".vue",
+    ".svelte",
+    ".astro",
+    ".graphql",
+    ".gql",
+    # Systems & Logic
+    ".py",
+    ".pyi",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cc",
+    ".hh",
+    ".cs",
+    ".java",
+    ".rb",
+    ".php",
+    ".swift",
+    ".m",
+    ".mm",
+    ".kt",
+    ".kts",
+    ".dart",
+    ".rs",
+    ".go",
+    ".zig",
+    ".lua",
+    ".pl",
+    ".pm",
+    ".hs",
+    ".erl",
+    ".ex",
+    ".exs",
+    ".sql",
+    # Shell & Scripts
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".ps1",
+    ".bat",
+    ".cmd",
+    ".awk",
+    # Config & Data
+    ".json",
+    ".jsonl",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".conf",
+    ".env",
+    ".xml",
+    ".csv",
+    ".tsv",
+    ".proto",
+    ".tf",
+    ".tfvars",
+    # Documentation & Meta
+    ".txt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".log",
+    ".diff",
+    ".patch",
+    ".gitignore",
+    ".dockerignore",
+    ".editorconfig",
+)
+
+SPECIAL_FILES = ("dockerfile", "makefile", "procfile", "gemfile", "license")
+
+
 # Terminal integration
 CONSOLE = Console()
 
