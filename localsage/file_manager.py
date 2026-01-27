@@ -171,6 +171,7 @@ class FileManager:
                 if not purge:
                     return None
                 return kind  # For the UI to catch
+        return "pass"
 
     def get_attachments(self) -> list[tuple[int, str, str]]:
         """Retrieves a list of all attachments by utilizing regex."""
