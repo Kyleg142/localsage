@@ -13,7 +13,6 @@ from prompt_toolkit.completion import (
 from prompt_toolkit.validation import Validator
 
 from localsage.globals import (
-    DIR_PATTERN,
     FILE_PATTERN,
     RESTRICTED_FILES,
     SESSIONS_DIR,
@@ -39,11 +38,12 @@ class FileManager:
 
     def process_file(self, path: str) -> tuple[bool, int, str] | None:
         """Processes a file or directory for attachment"""
-        content_blocks: list[str] = []
-        filelist: list[str] = []
 
-        path = os.path.abspath(os.path.expanduser(path))
-        basename = os.path.basename(path)
+        def remove_existing(name: str):
+            attachments = self.get_attachments()
+            existing = [(i, t, n) for i, t, n in attachments if n == name]
+            if existing:
+                self.session.remove_history(existing[-1][0])
 
         def read_file(src: str) -> str:
             try:
@@ -53,6 +53,16 @@ class FileManager:
                 with open(src, "r", encoding="latin-1") as f:
                     return f.read().replace("```", "'''")
 
+        def file_wrapper(name: str, path: str) -> str:
+            return f"---\nFile: `{name}`\n```\n{path}\n```\n---"
+
+        consumption: int = 0
+        existing: list[tuple[int, str, str]] = []
+        filelist: list[str] = []
+
+        path = os.path.abspath(os.path.expanduser(path))
+        basename = os.path.basename(path)
+
         if os.path.isdir(path):
             with os.scandir(path) as entries:
                 for file in entries:
@@ -61,31 +71,25 @@ class FileManager:
                         and not file.name.startswith(".")
                         and not file.name.endswith(RESTRICTED_FILES)
                     ):
+                        remove_existing(file.name)
                         filelist.append(file.name)
-                        content_blocks.append(
-                            f"File: `{file.name}`\n```\n{read_file(file.path)}\n```"
-                        )
+                        wrapped = file_wrapper(file.name, read_file(file.path))
+                        self.session.append_message("user", wrapped)
+                        consumption += self.session.encode(wrapped)
             if not filelist:
                 return
             formatted = ", ".join(filelist)
-            content = "\n\n".join(content_blocks)
-            wrapped = (
-                f"---\nDirectory: `{basename}`\nFiles: `{formatted}`\n\n{content}\n---"
-            )
+
         elif os.path.isfile(path) and not path.endswith(RESTRICTED_FILES):
+            remove_existing(basename)
             formatted = ""
-            wrapped = f"---\nFile: `{basename}`\n```\n{read_file(path)}\n```\n---"
+            wrapped = file_wrapper(basename, read_file(path))
+            consumption = self.session.encode(wrapped)
+            self.session.append_message("user", wrapped)
+
         else:
             return
 
-        consumption = self.session.encode(wrapped)
-
-        # If the file exists already in context, delete it.
-        existing = [(i, t, n) for i, t, n in self.get_attachments() if n == basename]
-        if existing:
-            self.session.remove_history(existing[-1][0])
-
-        self.session.append_message("user", wrapped)
         return bool(existing), consumption, formatted
 
     def process_website(self, url: str) -> int:
@@ -173,13 +177,10 @@ class FileManager:
             if isinstance(content, str):
                 match1 = FILE_PATTERN.match(content)
                 match2 = SITE_PATTERN.match(content)
-                match3 = DIR_PATTERN.match(content)
                 if match1:
                     attachments.append((i, "file", match1.group(1)))
                 if match2:
                     attachments.append((i, "website", match2.group(1)))
-                if match3:
-                    attachments.append((i, "directory", match3.group(1)))
         return attachments
 
     def path_validator(self) -> Validator:
