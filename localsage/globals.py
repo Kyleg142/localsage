@@ -36,7 +36,6 @@ os.makedirs(LOG_DIR, exist_ok=True)
 # Compiled regex used in the context management system
 # Alternative, allows whitespace: ^---\s*File:\s*(.+?)
 FILE_PATTERN = re.compile(r"^---\nFile: `(.*?)`", re.MULTILINE)
-DIR_PATTERN = re.compile(r"^---\nDirectory: `(.*?)`", re.MULTILINE)
 SITE_PATTERN = re.compile(r"^---\nWebsite: `(.*?)`", re.MULTILINE)
 
 # Restricted file types that are not compatible with text-based assistants
