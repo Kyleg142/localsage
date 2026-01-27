@@ -3,7 +3,9 @@
 # Custom validators and word completers live here as well.
 
 import os
+from urllib.parse import ParseResult, urlparse
 
+import requests
 import trafilatura
 from prompt_toolkit.completion import (
     WordCompleter,
@@ -16,6 +18,8 @@ from localsage.globals import (
     RESTRICTED_FILES,
     SESSIONS_DIR,
     SITE_PATTERN,
+    SPECIAL_FILES,
+    WEB_FILES,
 )
 
 
@@ -86,21 +90,65 @@ class FileManager:
 
     def process_website(self, url: str) -> int:
         """Processes a website for attachment (uses trafilatura)"""
-        downloaded = trafilatura.fetch_url(url)
-        if not downloaded:
-            raise Exception("The website blocked the request or returned no data.")
 
-        content = trafilatura.extract(
-            downloaded, include_links=True, include_comments=False
+        def normalize_url(url: str) -> str:
+            """Converts a github, gitlab, or pastebin URL to it's raw alternative"""
+            parsed = urlparse(url)
+            url = url.strip()
+            if parsed.netloc == "github.com" and "/blob/" in parsed.path:
+                return url.replace("github.com", "raw.githubusercontent.com").replace(
+                    "/blob/", "/", 1
+                )
+            if parsed.netloc == "gitlab.com" and "/blob/" in parsed.path:
+                return url.replace("/blob/", "/raw/", 1)
+            if parsed.netloc == "pastebin.com" and not parsed.path.startswith("/raw/"):
+                paste_id = parsed.path.strip("/").split("/")[-1]
+                return f"https://pastebin.com/raw/{paste_id}"
+            return url
+
+        original_url = url
+        url = normalize_url(url)
+        parsed = urlparse(url)
+
+        is_raw = (
+            parsed.netloc == "raw.githubusercontent.com"
+            or parsed.path.startswith("/raw/")
+            or url.lower().endswith(WEB_FILES)
+            or url.lower().split("/")[-1] in SPECIAL_FILES
         )
 
+        # Check if site content is raw text
+        if is_raw:
+            response = requests.get(url, allow_redirects=True, timeout=15)
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch raw file: {response.status_code}")
+            ct = response.headers.get("Content-Type", "")
+            if "text" not in ct and "json" not in ct:
+                raise Exception("Unsupported raw content type.")
+            content = response.text
+            raw_data = response.text
+
+        # Else, parse site content with trafilatura
+        else:
+            downloaded = trafilatura.fetch_url(url)
+            if not downloaded:
+                raise Exception("The website blocked the request or returned no data.")
+
+            content = trafilatura.extract(
+                downloaded, include_links=True, include_comments=False
+            )
+            raw_data = downloaded
+
+        # If all else fails, convert HTML to raw text
         if not content:
-            content = trafilatura.html2txt(downloaded)
-        if not content:
+            content = trafilatura.html2txt(raw_data)
+
+        # Dip out if no site content was found
+        if not content or not content.strip():
             raise Exception("Could not find any readable text on this page.")
 
         consumption = self.session.encode(content)
-        im_a_wrapper = f"---\nWebsite: `{url}`\n{content}\n---"
+        im_a_wrapper = f"---\nWebsite: `{original_url}`\n{content}\n---"
         self.session.append_message("user", im_a_wrapper)
         return consumption
 
