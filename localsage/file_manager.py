@@ -3,7 +3,7 @@
 # Custom validators and word completers live here as well.
 
 import os
-from urllib.parse import ParseResult, urlparse
+from urllib.parse import urlparse
 
 import requests
 import trafilatura
