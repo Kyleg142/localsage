@@ -542,8 +542,15 @@ class CLIController:
 
     def purge_all_attachments(self):
         """Removes all attachments from the active session."""
-        self.filemanager.remove_attachment("[all]")
-        CONSOLE.print("[cyan]All attachments removed.")
+        purge = self.filemanager.remove_attachment("[all]")
+        if purge:
+            CONSOLE.print("[cyan]All attachments removed.")
+        else:
+            self.panel.spawn_error_panel(
+                "ERROR PURGING ATTACHMENTS",
+                "Failed to remove an attachment. Check !attachments, and try purging the top entry alone.",
+            )
+            return
         self.panel.spawn_status_panel(toks=False)
 
     def change_working_directory(self):
