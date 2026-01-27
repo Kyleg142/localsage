@@ -159,14 +159,18 @@ class FileManager:
     def remove_attachment(self, target: int | str) -> str | None:
         """Removes an attachment by name."""
         attachments = self.get_attachments()
+        purge: bool = True
         for i, kind, _ in reversed(attachments):
             if target == "[all]":
-                self.session.remove_history(i)
+                purge = self.session.remove_history(i)
+                if not purge:
+                    return None
                 continue
             if target == i:
-                self.session.remove_history(i)
+                purge = self.session.remove_history(i)
+                if not purge:
+                    return None
                 return kind  # For the UI to catch
-        return None
 
     def get_attachments(self) -> list[tuple[int, str, str]]:
         """Retrieves a list of all attachments by utilizing regex."""
