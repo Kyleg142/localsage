@@ -432,7 +432,7 @@ class App:
             try:
                 user_input = root_prompt()
             except (KeyboardInterrupt, EOFError):
-                CONSOLE.print("[yellow]✨ Farewell![/yellow]\n")
+                CONSOLE.print("[yellow]✨ Farewell![/yellow]")
                 break
 
             if not user_input.strip():
@@ -468,17 +468,14 @@ def main():
     try:
         init_logger()
         setup_keyring_backend()
-        # Start a spinner, mostly for cold starts
-        with Live(
-            spinner_constructor("Launching Local Sage..."),
-            refresh_per_second=8,
-            console=CONSOLE,
+        with CONSOLE.status(
+            "[bold medium_orchid]Launching Local Sage...[/bold medium_orchid]",
+            spinner="moon",
         ):
             app = App()
-        CONSOLE.clear()
         app.run()
     except (KeyboardInterrupt, EOFError):
-        CONSOLE.print("[yellow]✨ Farewell![/yellow]\n")
+        CONSOLE.print("[yellow]✨ Farewell![/yellow]")
     except Exception as e:
         log_exception(e, "Critical startup error")  # Log any critical errors
         CONSOLE.print(f"[bold][red]CRITICAL ERROR:[/red][/bold] {e}")
