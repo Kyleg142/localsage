@@ -1,3 +1,17 @@
+### 1.4.8
+
+**Technical Improvements**
+- Embedded links are no longer included when scraping a website, which greatly reduces context usage when scraping sources such as Wikipedia.
+- Enviroment context now includes the current date.
+
+---
+
+### 1.4.7
+
+**UX**: The CLI no longer clears the terminal when initialized, preserving previous terminal output.
+
+---
+
 ### v1.4.6
 
 More polish and technical improvements.

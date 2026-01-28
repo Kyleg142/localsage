@@ -146,7 +146,9 @@ class FileManager:
         if is_html:
             cleaned_html = scrub_content(downloaded)
             content = trafilatura.extract(
-                cleaned_html, include_links=True, include_comments=False
+                cleaned_html,
+                include_comments=False,
+                deduplicate=True,
             )
             if not content:
                 content = trafilatura.html2txt(cleaned_html)
