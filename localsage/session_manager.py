@@ -186,7 +186,7 @@ class SessionManager:
 
     def env_change(self):
         """Alters the system prompt when the working directory is changed"""
-        if self.history[0]:
+        if self.history and self.history[0]["role"] == "system":
             self.history[0]["content"] = self.get_full_system_prompt()
 
     def process_history(self) -> list:
