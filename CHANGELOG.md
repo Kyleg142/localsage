@@ -1,3 +1,15 @@
+### v1.4.6
+
+More polish and technical improvements.
+
+**Technical Improvements**
+- Added manual HTML cleaning to the website scraping pipeline. Scraping a website now consumes far less context on average.
+- Fixed a small bug with file attachment, which was causing the token cache to rebuild if a file failed to attach.
+
+And quite a bit of code cleanup.
+
+---
+
 ### v1.4.5
 
 **Technical Improvements**
