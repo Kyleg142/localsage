@@ -5,6 +5,7 @@ import os
 import platform
 import sys
 import textwrap
+from datetime import date
 
 import tiktoken
 from openai.types.chat import ChatCompletionMessageParam
@@ -18,7 +19,7 @@ class SessionManager:
     def __init__(self, config):
         self.config = config
         self.history: list[ChatCompletionMessageParam] = [
-            {"role": "system", "content": self.config.system_prompt}
+            {"role": "system", "content": self.get_full_system_prompt()}
         ]
         self.active_session: str = ""
         self.encoder = tiktoken.get_encoding("o200k_base")
@@ -166,13 +167,14 @@ class SessionManager:
         return textwrap.dedent(f"""
         [ENVIRONMENT CONTEXT]
         Current User: {USER_NAME}
+        Date: {date.today()}
         Operating System: {system_info}
         Working Directory: {wd}
         Visible Files: {", ".join(files[:20])}
         Visible Directories: {", ".join(dirs[:20])}
         """).strip()
 
-    def get_full_system_prompt(self):
+    def get_full_system_prompt(self) -> str:
         base = textwrap.dedent("""
         [CORE OPERATING PRINCIPLE]
         The [ENVIRONMENT CONTEXT] block is your ONLY source of truth regarding the local filesystem.
@@ -180,8 +182,12 @@ class SessionManager:
         - If a conflict exists between the conversation history and the [ENVIRONMENT CONTEXT], the context block is the absolute authority.
         """)
         env = self.get_environment()
-
         return f"{self.config.system_prompt}\n\n{base}\n\n{env}"
+
+    def env_change(self):
+        """Alters the system prompt when the working directory is changed"""
+        if self.history[0]:
+            self.history[0]["content"] = self.get_full_system_prompt()
 
     def process_history(self) -> list:
         """Condenses duplicate user entries within session history"""
@@ -195,9 +201,6 @@ class SessionManager:
                 processed_history[-1]["content"] += f"\n\n{msg['content']}"
             else:
                 processed_history.append(msg.copy())
-
-        if processed_history and processed_history[0]["role"] == "system":
-            processed_history[0]["content"] = self.get_full_system_prompt()
 
         return processed_history
 
