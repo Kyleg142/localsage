@@ -62,8 +62,11 @@ class SessionManager:
         # No longer assumes that index is valid
         try:
             self.history.pop(index)
+            if index < len(self.token_cache):
+                self.token_cache.pop(index)
+            return True
         except IndexError:
-            pass
+            return False
 
     def reset(self):
         """Reset the current session state"""

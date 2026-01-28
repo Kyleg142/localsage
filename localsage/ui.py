@@ -253,5 +253,6 @@ class GlobalPanels:
         CONSOLE.print(self.ui.assistant_panel_constructor(content))
 
     def spawn_copy_panel(self, blocks: str):
+        CONSOLE.print()
         CONSOLE.print(self.ui.copy_panel_constructor(blocks))
         CONSOLE.print()
