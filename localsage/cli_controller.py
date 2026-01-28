@@ -583,6 +583,7 @@ class CLIController:
 
         try:
             os.chdir(os.path.abspath(os.path.expanduser(path)))
+            self.session.env_change()
             self.session.append_message(
                 "user",
                 f"[SYSTEM NOTE: The working directory has changed to {os.getcwd()}. New content is visible in [ENVIRONMENT CONTEXT].]",
