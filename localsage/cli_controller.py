@@ -461,10 +461,21 @@ class CLIController:
             return
 
         try:
+            size = round(self.filemanager.process_file_size(path) / 1024**2, 1)
+            if size >= 1:
+                CONSOLE.print(
+                    f"[yellow]Warning: Large payload detected ({size}MB).[/yellow]"
+                )
+                confirm = self._prompt_wrapper(
+                    HTML("Continue? (<seagreen>y</seagreen>/<ansired>N</ansired>): ")
+                )
+                if not confirm or not confirm.lower().startswith("y"):
+                    return
+
             file = self.filemanager.process_file(path)
             if not file:
                 CONSOLE.print(
-                    "[dim]Skipped: Source is empty, binary, or contains hidden content.[/dim]\n"
+                    "[dim]Skipped: Source is empty, binary, or restricted.[/dim]\n"
                 )
                 return
             is_update = file[0]
@@ -480,9 +491,11 @@ class CLIController:
                 )
             if consumption > 50:
                 CONSOLE.print(
-                    "[dim]Large payload detected! Use [cyan]!purge[/cyan], if needed, to recover context."
+                    "[dim]Large payload attached! Use [cyan]!purge[/cyan], if needed, to recover context.[/dim]"
                 )
             self.panel.spawn_status_panel(toks=False)
+        except PermissionError as e:
+            CONSOLE.print(f"[dim]{e}[/dim]\n")
         except Exception as e:
             log_exception(e, "Error in process_file()")
             self.panel.spawn_error_panel("ERROR READING FILE", f"{e}")
@@ -538,17 +551,20 @@ class CLIController:
             )
             self.panel.spawn_status_panel(toks=False)
         else:
-            CONSOLE.print(f"[red]Entry {value} does not exist.[/red]\n")
+            CONSOLE.print(f"[dim]Entry {value} does not exist.[/dim]\n")
 
     def purge_all_attachments(self):
         """Removes all attachments from the active session."""
+        if not self.filemanager.get_attachments():
+            CONSOLE.print("[dim]No attachments found.[/dim]\n")
+            return
         purge = self.filemanager.remove_attachment("[all]")
         if purge:
             CONSOLE.print("[cyan]All attachments removed.")
         else:
             self.panel.spawn_error_panel(
                 "ERROR PURGING ATTACHMENTS",
-                "Failed to remove an attachment. Check !attachments, and try purging the top entry alone.",
+                "Failed to remove an attachment. Check !attachments, and try purging the last entry.",
             )
             return
         self.panel.spawn_status_panel(toks=False)
@@ -587,9 +603,13 @@ class CLIController:
             CONSOLE.print("[dim]No assistant response found to copy from.[/dim]\n")
             return
 
-        # blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", assistant_msg, re.DOTALL) | Old regex
-        pattern = r"```[^\S\n]*\w*[^\S\n]*\n(.*?)\n[^\S\n]*```"
-        blocks = re.findall(pattern, assistant_msg, re.DOTALL)
+        pattern1 = r"^.*\n</think>\n\n"
+        pattern2 = r"```[^\S\n]*\w*[^\S\n]*\n(.*?)\n[^\S\n]*```"
+
+        # Toss out reasoning content
+        assistant_msg = re.sub(pattern1, "", assistant_msg, re.DOTALL)
+        # Build a list of code blocks
+        blocks = re.findall(pattern2, assistant_msg, re.DOTALL)
 
         if not blocks:
             CONSOLE.print("[dim]No code blocks found in the last response.[/dim]\n")
