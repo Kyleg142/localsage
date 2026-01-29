@@ -71,7 +71,7 @@ class SessionManager:
 
     def reset(self):
         """Reset the current session state"""
-        self.history = [{"role": "system", "content": self.config.system_prompt}]
+        self.history = [{"role": "system", "content": self.get_full_system_prompt()}]
         self.active_session = ""
         self.token_cache = []
 
@@ -80,7 +80,7 @@ class SessionManager:
         self.active_session = ""
         self.token_cache = []
         self.history = [
-            {"role": "system", "content": self.config.system_prompt},
+            {"role": "system", "content": self.get_full_system_prompt()},
             {
                 "role": "system",
                 "content": "This summary represents the previous session.",
@@ -176,18 +176,37 @@ class SessionManager:
 
     def get_full_system_prompt(self) -> str:
         base = textwrap.dedent("""
-        [CORE OPERATING PRINCIPLE]
-        The [ENVIRONMENT CONTEXT] block is your ONLY source of truth regarding the local filesystem.
-        - This block is DYNAMIC and updates every turn. You MUST check it EVERY TURN to ground yourself.
-        - If a conflict exists between the conversation history and the [ENVIRONMENT CONTEXT], the context block is the absolute authority.
+        [CORE OPERATING PRINCIPLES]
+        1. The [ENVIRONMENT CONTEXT] block is your ONLY source of truth regarding the local filesystem.
+        2  [ENVIRONMENT CONTEXT] is DYNAMIC, and can change. You will be notified when this occurs.
+        3. If a conflict exists between the conversation history and the [ENVIRONMENT CONTEXT], the context block is the absolute authority.
         """)
         env = self.get_environment()
         return f"{self.config.system_prompt}\n\n{base}\n\n{env}"
 
-    def env_change(self):
-        """Alters the system prompt when the working directory is changed"""
+    def env_change(self, path: str):
+        """Changes the working directory, notifies the model"""
+        os.chdir(os.path.abspath(os.path.expanduser(path)))
+
+        # Mutate sys prompt w/ new env context block
         if self.history and self.history[0]["role"] == "system":
             self.history[0]["content"] = self.get_full_system_prompt()
+
+        note: str = "\n\n[SYSTEM NOTE: The working directory has changed. New content is visible in [ENVIRONMENT CONTEXT].]"
+
+        # Remove existing env context block, if it exists
+        for i in reversed(range(len(self.history))):
+            msg: str = self.history[i]["content"]  # pyright: ignore | content always exists!
+            if msg.endswith(note):
+                self.remove_history(i)
+                break
+
+        # Append env context block to history. In testing, mutating the sys prompt and notifying the model wasn't enough
+        content = f"{self.get_environment()}{note}"
+        self.append_message(
+            "user",
+            content,
+        )
 
     def process_history(self) -> list:
         """Condenses duplicate user entries within session history"""
