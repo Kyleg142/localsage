@@ -1,14 +1,14 @@
-### 1.4.9
+### v1.4.9
 
 Further improved environment context by injecting the **ENVIRONMENT CONTEXT** block into the session history when `!cd` is used. If the context block already exists in the session history, it is removed first in order to prevent context bloat.
 
 This proved to be a better technique for grounding the active model.
 
-**Bug Fix**: Environment context is now properly applied at the start of a session when using `!reset` or `!sum`.
+**Bug Fix**: Environment context is now properly applied when using `!reset` or `!sum` for a fresh session.
 
 ---
 
-### 1.4.8
+### v1.4.8
 
 **Technical Improvements**
 - Embedded links are no longer included when scraping a website, which greatly reduces context usage when scraping sources such as Wikipedia.
@@ -16,7 +16,7 @@ This proved to be a better technique for grounding the active model.
 
 ---
 
-### 1.4.7
+### v1.4.7
 
 **UX**: The CLI no longer clears the terminal when initialized, preserving previous terminal output.
 
