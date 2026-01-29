@@ -1,3 +1,13 @@
+### 1.4.9
+
+Further improved environment context by injecting the **ENVIRONMENT CONTEXT** block into the session history when `!cd` is used. If the context block already exists in the session history, it is removed first in order to prevent context bloat.
+
+This proved to be a better technique for grounding the active model.
+
+**Bug Fix**: Environment context is now properly applied at the start of a session when using `!reset` or `!sum`.
+
+---
+
 ### 1.4.8
 
 **Technical Improvements**
